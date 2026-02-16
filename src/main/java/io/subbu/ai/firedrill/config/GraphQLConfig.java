@@ -10,6 +10,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.graphql.execution.RuntimeWiringConfigurer;
 
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 
 /**
@@ -46,8 +47,11 @@ public class GraphQLConfig {
                     public String serialize(Object dataFetcherResult) throws CoercingSerializeException {
                         if (dataFetcherResult instanceof LocalDateTime) {
                             return ((LocalDateTime) dataFetcherResult).format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+                        } else if (dataFetcherResult instanceof OffsetDateTime) {
+                            // Convert OffsetDateTime to LocalDateTime for serialization
+                            return ((OffsetDateTime) dataFetcherResult).toLocalDateTime().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
                         }
-                        throw new CoercingSerializeException("Expected a LocalDateTime object.");
+                        throw new CoercingSerializeException("Expected a LocalDateTime or OffsetDateTime object.");
                     }
 
                     @Override
