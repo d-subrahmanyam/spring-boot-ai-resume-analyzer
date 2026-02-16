@@ -1,0 +1,49 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - heading "🎯 Resume Analyzer" [level=1] [ref=e5]
+    - navigation [ref=e6]:
+      - link "Dashboard" [ref=e7] [cursor=pointer]:
+        - /url: /
+      - link "Upload Resumes" [ref=e8] [cursor=pointer]:
+        - /url: /upload
+      - link "Candidates" [ref=e9] [cursor=pointer]:
+        - /url: /candidates
+      - link "Job Requirements" [ref=e10] [cursor=pointer]:
+        - /url: /jobs
+      - link "Candidate Matching" [ref=e11] [cursor=pointer]:
+        - /url: /matching
+      - link "Skills Master" [ref=e12] [cursor=pointer]:
+        - /url: /skills
+  - main [ref=e13]:
+    - generic [ref=e14]:
+      - heading "Dashboard" [level=2] [ref=e15]
+      - generic [ref=e16]:
+        - generic [ref=e17]:
+          - heading "Total Candidates" [level=3] [ref=e18]
+          - paragraph [ref=e19]: "0"
+        - generic [ref=e20]:
+          - heading "Active Jobs" [level=3] [ref=e21]
+          - paragraph [ref=e22]: "0"
+        - generic [ref=e23]:
+          - heading "Total Jobs" [level=3] [ref=e24]
+          - paragraph [ref=e25]: "0"
+      - heading "Quick Actions" [level=2] [ref=e26]
+      - generic [ref=e27]:
+        - generic [ref=e28]:
+          - heading "📤 Upload Resumes" [level=3] [ref=e29]
+          - paragraph [ref=e30]: Upload single or multiple resumes for AI-powered analysis and candidate extraction.
+          - button "Upload Now" [ref=e31] [cursor=pointer]
+        - generic [ref=e32]:
+          - heading "👔 Create Job Posting" [level=3] [ref=e33]
+          - paragraph [ref=e34]: Create a new job requirement to match against existing candidates.
+          - button "Create Job" [ref=e35] [cursor=pointer]
+        - generic [ref=e36]:
+          - heading "🎯 Match Candidates" [level=3] [ref=e37]
+          - paragraph [ref=e38]: Use AI to match candidates against job requirements with detailed scoring.
+          - button "Start Matching" [ref=e39] [cursor=pointer]
+  - contentinfo [ref=e40]:
+    - paragraph [ref=e41]: Resume Analyzer - AI-Powered Candidate Matching System © 2025
+```
