@@ -142,11 +142,15 @@ yarn test
 - **Categories**: Organize skills by category (Languages, Frameworks, Databases, etc.)
 - **Pre-populated Data**: 70+ skills across multiple technology categories
 
-### Resume Analysis
-- Upload resumes (PDF, DOC, DOCX, ZIP)
-- AI-powered information extraction
-- Vector embeddings for similarity search
-- Batch processing support
+### Resume Upload & Processing
+- **Multi-format Support**: Upload resumes in PDF, DOC, DOCX, or ZIP formats
+- **Batch Processing**: Process multiple resumes simultaneously
+- **Real-time Tracking**: Track upload progress with detailed status updates
+- **Upload History**: View recent uploads with status, progress, and timestamps
+- **AI-powered Extraction**: Automatic information extraction using local LLM
+- **Vector Embeddings**: Generate semantic embeddings for similarity search
+- **Progress Monitoring**: Individual refresh buttons for each upload
+- **Dual-component UI**: Separate upload area and progress tracking table
 
 ### Candidate Matching
 - Match candidates to job requirements
@@ -157,6 +161,10 @@ yarn test
 ## API Documentation
 
 ### GraphQL API
+
+**📚 Complete API Documentation**: See [docs/GRAPHQL-API.md](docs/GRAPHQL-API.md) for comprehensive request/response examples, error handling, and best practices.
+
+**Quick Reference:**
 
 **Candidate Queries:**
 - `allCandidates`: Get all candidates
@@ -327,9 +335,12 @@ The Maven build:
 Comprehensive documentation is available in the `docs/` folder:
 
 - **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** - System architecture with 15+ UML diagrams
+- **[GRAPHQL-API.md](docs/GRAPHQL-API.md)** - Complete GraphQL API reference with examples
 - **[NEXT-STEPS.md](docs/NEXT-STEPS.md)** - Complete roadmap with 7 implementation phases
 - **[PROJECT-SUMMARY.md](docs/PROJECT-SUMMARY.md)** - Complete feature overview
 - **[LLM-STUDIO-SETUP.md](docs/LLM-STUDIO-SETUP.md)** - LM Studio configuration guide
+- **[DOCKER-DEPLOYMENT.md](docs/DOCKER-DEPLOYMENT.md)** - Docker deployment guide
+- **[SKILLS-MANAGEMENT.md](docs/SKILLS-MANAGEMENT.md)** - Skills master data management
 - **[.env.example](docs/.env.example)** - Environment variables template
 - **[resume-analyzer.md](docs/resume-analyzer.md)** - Original requirements
 

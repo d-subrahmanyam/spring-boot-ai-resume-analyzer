@@ -1,5 +1,5 @@
 .upload {
-  max-width: 800px;
+  max-width: 1200px;
   margin: 0 auto;
 }
 
@@ -227,4 +227,23 @@
 
 .newUploadButton:hover {
   background: #5a67d8;
+}
+
+.currentTracker {
+  background: #fffaf0;
+  border: 2px solid #fbd38d;
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.currentTracker h3 {
+  margin-top: 0;
+  margin-bottom: 1rem;
+  color: #744210;
+  font-size: 1.125rem;
+}
+
+.uploadSection {
+  margin-bottom: 2rem;
 }

@@ -6,20 +6,29 @@ export interface ProcessTracker {
   totalFiles: number
   processedFiles: number
   failedFiles: number
-  startTime: string
+  message?: string
+  uploadedFilename?: string
+  createdAt: string
+  updatedAt: string
+  completedAt?: string
+  // Legacy fields for backward compatibility with API
+  startTime?: string
   endTime?: string
-  errorMessage?: string
 }
 
 interface UploadState {
   uploading: boolean
   tracker: ProcessTracker | null
+  trackers: ProcessTracker[]
+  fetchingTrackers: boolean
   error: string | null
 }
 
 const initialState: UploadState = {
   uploading: false,
   tracker: null,
+  trackers: [],
+  fetchingTrackers: false,
   error: null,
 }
 
@@ -49,6 +58,17 @@ const uploadSlice = createSlice({
       state.tracker = null
       state.error = null
     },
+    fetchRecentTrackers: (state, _action: PayloadAction<number>) => {
+      state.fetchingTrackers = true
+    },
+    fetchRecentTrackersSuccess: (state, action: PayloadAction<ProcessTracker[]>) => {
+      state.trackers = action.payload
+      state.fetchingTrackers = false
+    },
+    fetchRecentTrackersFailure: (state, action: PayloadAction<string>) => {
+      state.error = action.payload
+      state.fetchingTrackers = false
+    },
   },
 })
 
@@ -59,6 +79,9 @@ export const {
   fetchProcessStatus,
   updateProcessStatus,
   clearTracker,
+  fetchRecentTrackers,
+  fetchRecentTrackersSuccess,
+  fetchRecentTrackersFailure,
 } = uploadSlice.actions
 
 export default uploadSlice.reducer

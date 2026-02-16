@@ -384,3 +384,20 @@ export const DELETE_SKILL = `
     deleteSkill(id: $id)
   }
 `
+
+export const GET_RECENT_TRACKERS = `
+  query GetRecentTrackers($hours: Int!) {
+    recentProcessTrackers(hours: $hours) {
+      id
+      status
+      totalFiles
+      processedFiles
+      failedFiles
+      message
+      uploadedFilename
+      createdAt
+      updatedAt
+      completedAt
+    }
+  }
+`

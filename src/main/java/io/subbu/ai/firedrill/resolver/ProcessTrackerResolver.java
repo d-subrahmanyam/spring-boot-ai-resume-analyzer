@@ -8,6 +8,8 @@ import org.springframework.graphql.data.method.annotation.Argument;
 import org.springframework.graphql.data.method.annotation.QueryMapping;
 import org.springframework.stereotype.Controller;
 
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -25,5 +27,12 @@ public class ProcessTrackerResolver {
         log.info("Fetching process status: {}", trackerId);
         return trackerRepository.findById(trackerId)
                 .orElseThrow(() -> new RuntimeException("Process tracker not found: " + trackerId));
+    }
+
+    @QueryMapping
+    public List<ProcessTracker> recentProcessTrackers(@Argument int hours) {
+        log.info("Fetching process trackers from the last {} hours", hours);
+        LocalDateTime cutoffTime = LocalDateTime.now().minusHours(hours);
+        return trackerRepository.findByCreatedAtAfter(cutoffTime);
     }
 }

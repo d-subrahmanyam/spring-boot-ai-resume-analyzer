@@ -20,7 +20,7 @@ export interface ProcessStatusResponse {
   failedFiles: number
   startTime: string
   endTime?: string
-  errorMessage?: string
+  message?: string
 }
 
 export const uploadResumes = async (files: File[]): Promise<UploadResponse> => {

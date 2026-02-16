@@ -14,6 +14,7 @@ import { graphqlClient,
   MATCH_CANDIDATE_TO_JOB,
   MATCH_ALL_CANDIDATES_TO_JOB,
   UPDATE_MATCH_STATUS,
+  GET_RECENT_TRACKERS,
 } from '@services/graphql'
 import { uploadResumes, getProcessStatus } from '@services/api'
 import * as candidatesActions from '@store/slices/candidatesSlice'
@@ -210,7 +211,8 @@ function* uploadFilesSaga(action: PayloadAction<File[]>) {
       totalFiles: action.payload.length,
       processedFiles: 0,
       failedFiles: 0,
-      startTime: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     }
     yield put(uploadActions.uploadSuccess(tracker))
   } catch (error: any) {
@@ -224,6 +226,19 @@ function* fetchProcessStatusSaga(action: PayloadAction<string>): Generator<any, 
     yield put(uploadActions.updateProcessStatus(status))
   } catch (error: any) {
     yield put(uploadActions.uploadFailure(error.message))
+  }
+}
+
+function* fetchRecentTrackersSaga(action: PayloadAction<number>) {
+  try {
+    const data: { recentProcessTrackers: ProcessTracker[] } = yield call(
+      gqlRequest,
+      GET_RECENT_TRACKERS,
+      { hours: action.payload }
+    )
+    yield put(uploadActions.fetchRecentTrackersSuccess(data.recentProcessTrackers))
+  } catch (error: any) {
+    yield put(uploadActions.fetchRecentTrackersFailure(error.message))
   }
 }
 
@@ -245,5 +260,6 @@ export default function* rootSaga() {
     takeEvery(matchesActions.updateMatchStatus.type, updateMatchStatusSaga),
     takeEvery(uploadActions.uploadFiles.type, uploadFilesSaga),
     takeEvery(uploadActions.fetchProcessStatus.type, fetchProcessStatusSaga),
+    takeLatest(uploadActions.fetchRecentTrackers.type, fetchRecentTrackersSaga),
   ])
 }

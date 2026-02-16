@@ -7,13 +7,13 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -35,6 +35,55 @@ public class FileUploadService {
     @Value("${app.upload.allowed-extensions:.doc,.docx,.pdf}")
     private String allowedExtensions;
 
+
+    /**
+     * Handle multiple file upload.
+     * Creates a process tracker and initiates async processing.
+     * 
+     * @param files List of uploaded files
+     * @return UUID of the process tracker
+     * @throws IOException if file operations fail
+     */
+    public UUID handleMultipleFileUpload(List<MultipartFile> files) throws IOException {
+        log.info("Handling multiple file upload, count: {}", files.size());
+
+        if (files.isEmpty()) {
+            throw new IllegalArgumentException("No files provided");
+        }
+
+        // Validate all files first
+        for (MultipartFile file : files) {
+            validateFile(file);
+        }
+
+        // Create process tracker
+        ProcessTracker tracker = ProcessTracker.builder()
+                .status(ProcessStatus.INITIATED)
+                .uploadedFilename(files.size() + " files")
+                .totalFiles(files.size())
+                .processedFiles(0)
+                .failedFiles(0)
+                .message("Received " + files.size() + " files, processing initiated")
+                .build();
+
+        tracker = trackerRepository.save(tracker);
+        log.info("Created process tracker for batch: {}", tracker.getId());
+
+        // Read file data
+        List<byte[]> fileDataList = new java.util.ArrayList<>();
+        List<String> filenames = new java.util.ArrayList<>();
+
+        for (MultipartFile file : files) {
+            fileDataList.add(file.getBytes());
+            filenames.add(file.getOriginalFilename());
+        }
+
+        // Process resumes asynchronously
+        resumeProcessingService.processMultipleResumes(fileDataList, filenames, tracker.getId());
+
+        return tracker.getId();
+    }
+
     /**
      * Handle single or ZIP file upload.
      * Creates a process tracker and initiates async processing.
@@ -43,7 +92,6 @@ public class FileUploadService {
      * @return UUID of the process tracker
      * @throws IOException if file operations fail
      */
-    @Transactional
     public UUID handleFileUpload(MultipartFile file) throws IOException {
         log.info("Handling file upload: {}", file.getOriginalFilename());
 

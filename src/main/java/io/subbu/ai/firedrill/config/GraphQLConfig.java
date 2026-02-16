@@ -1,20 +1,26 @@
 package io.subbu.ai.firedrill.config;
 
 import graphql.scalars.ExtendedScalars;
+import graphql.schema.Coercing;
+import graphql.schema.CoercingParseValueException;
+import graphql.schema.CoercingSerializeException;
 import graphql.schema.GraphQLScalarType;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.graphql.execution.RuntimeWiringConfigurer;
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+
 /**
  * GraphQL configuration for custom scalar types.
- * Provides implementations for UUID, DateTime, and Upload scalar types used in the schema.
+ * Provides implementations for UUID, LocalDateTime, and Upload scalar types used in the schema.
  */
 @Configuration
 public class GraphQLConfig {
 
     /**
-     * Configure GraphQL scalars for UUID, DateTime, and Upload types.
+     * Configure GraphQL scalars for UUID, LocalDateTime, and Upload types.
      * 
      * @return RuntimeWiringConfigurer with scalar type definitions
      */
@@ -22,8 +28,49 @@ public class GraphQLConfig {
     public RuntimeWiringConfigurer runtimeWiringConfigurer() {
         return wiringBuilder -> wiringBuilder
                 .scalar(ExtendedScalars.UUID)
-                .scalar(ExtendedScalars.DateTime)
+                .scalar(localDateTimeScalar())
                 .scalar(uploadScalar());
+    }
+
+    /**
+     * Create LocalDateTime scalar type for handling LocalDateTime fields.
+     * 
+     * @return GraphQLScalarType for LocalDateTime
+     */
+    private GraphQLScalarType localDateTimeScalar() {
+        return GraphQLScalarType.newScalar()
+                .name("LocalDateTime")
+                .description("LocalDateTime scalar")
+                .coercing(new Coercing<LocalDateTime, String>() {
+                    @Override
+                    public String serialize(Object dataFetcherResult) throws CoercingSerializeException {
+                        if (dataFetcherResult instanceof LocalDateTime) {
+                            return ((LocalDateTime) dataFetcherResult).format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+                        }
+                        throw new CoercingSerializeException("Expected a LocalDateTime object.");
+                    }
+
+                    @Override
+                    public LocalDateTime parseValue(Object input) throws CoercingParseValueException {
+                        try {
+                            if (input instanceof String) {
+                                return LocalDateTime.parse((String) input, DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+                            }
+                            throw new CoercingParseValueException("Expected a String");
+                        } catch (Exception e) {
+                            throw new CoercingParseValueException("Invalid LocalDateTime value: " + input, e);
+                        }
+                    }
+
+                    @Override
+                    public LocalDateTime parseLiteral(Object input) throws CoercingParseValueException {
+                        if (input instanceof String) {
+                            return parseValue(input);
+                        }
+                        throw new CoercingParseValueException("Expected a String literal");
+                    }
+                })
+                .build();
     }
 
     /**

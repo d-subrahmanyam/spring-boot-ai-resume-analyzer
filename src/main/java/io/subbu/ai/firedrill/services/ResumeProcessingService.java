@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.util.List;
 import java.util.UUID;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -54,6 +55,61 @@ public class ResumeProcessingService {
             log.error("Error processing resume: {}", filename, e);
             tracker.incrementFailedFiles();
             tracker.updateStatus(ProcessStatus.FAILED, "Error: " + e.getMessage());
+        } finally {
+            trackerRepository.save(tracker);
+        }
+    }
+
+    /**
+     * Process multiple resumes asynchronously.
+     * 
+     * @param fileDataList List of binary file content
+     * @param filenames List of filenames
+     * @param trackerId Process tracker ID
+     */
+    @Async
+    @Transactional
+    public void processMultipleResumes(List<byte[]> fileDataList, List<String> filenames, UUID trackerId) {
+        log.info("Processing {} resumes (Tracker: {})", filenames.size(), trackerId);
+
+        ProcessTracker tracker = trackerRepository.findById(trackerId)
+                .orElseThrow(() -> new IllegalArgumentException("Tracker not found: " + trackerId));
+
+        int totalFiles = filenames.size();
+        int processedFiles = 0;
+        int failedFiles = 0;
+
+        try {
+            for (int i = 0; i < totalFiles; i++) {
+                String filename = filenames.get(i);
+                byte[] data = fileDataList.get(i);
+
+                try {
+                    processResumeFile(data, filename, tracker);
+                    processedFiles++;
+                    tracker.incrementProcessedFiles();
+                } catch (Exception e) {
+                    log.error("Error processing file: {}", filename, e);
+                    failedFiles++;
+                    tracker.incrementFailedFiles();
+                }
+
+                tracker.updateStatus(
+                    ProcessStatus.INITIATED,
+                    String.format("Processed %d/%d files", processedFiles + failedFiles, totalFiles)
+                );
+                trackerRepository.save(tracker);
+            }
+
+            String message = String.format(
+                "Completed: %d successful, %d failed out of %d total",
+                processedFiles, failedFiles, totalFiles
+            );
+            tracker.updateStatus(ProcessStatus.COMPLETED, message);
+
+        } catch (Exception e) {
+            log.error("Error processing batch upload", e);
+            tracker.updateStatus(ProcessStatus.FAILED, "Batch processing error: " + e.getMessage());
         } finally {
             trackerRepository.save(tracker);
         }

@@ -34,18 +34,18 @@ public class FileUploadController {
      */
     @PostMapping("/resume")
     public ResponseEntity<Map<String, Object>> uploadResume(
-            @RequestParam("file") MultipartFile file) {
+            @RequestParam("files") java.util.List<MultipartFile> files) {
         
-        log.info("Received upload request: {}", file.getOriginalFilename());
+        log.info("Received upload request with {} files", files.size());
 
         try {
-            UUID trackerId = fileUploadService.handleFileUpload(file);
+            UUID trackerId = fileUploadService.handleMultipleFileUpload(files);
 
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
             response.put("trackerId", trackerId.toString());
             response.put("message", "File upload initiated successfully");
-            response.put("filename", file.getOriginalFilename());
+            response.put("filename", files.size() + " files");
 
             return ResponseEntity.ok(response);
 

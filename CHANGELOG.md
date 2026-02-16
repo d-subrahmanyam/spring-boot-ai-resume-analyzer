@@ -1,5 +1,166 @@
 # Resume Analyzer - Change Summary
 
+## ✅ Upload Progress Tracking Feature (February 16, 2026)
+
+**Status**: ✅ Complete and tested  
+**Feature**: Dual-component upload UI with real-time progress tracking
+
+### Overview
+Implemented comprehensive upload tracking system with historical view, allowing users to monitor current uploads and review past upload history with individual refresh capabilities.
+
+### Frontend Components
+
+**New Files Created:**
+- ✅ `src/main/frontend/src/components/ProcessTrackerTable/ProcessTrackerTable.tsx` - Upload history table component (240 lines)
+- ✅ `src/main/frontend/src/components/ProcessTrackerTable/ProcessTrackerTable.module.css` - Table styling with status badges and progress bars
+
+**Files Modified:**
+- ✅ `src/main/frontend/src/pages/FileUpload/FileUpload.tsx` - Restructured into 3 sections (current tracker, upload area, history table)
+- ✅ `src/main/frontend/src/pages/FileUpload/FileUpload.module.css` - Added styles for upload section and current tracker
+- ✅ `src/main/frontend/src/store/slices/uploadSlice.ts` - Added trackers array, fetchingTrackers state, fetchRecentTrackers actions
+- ✅ `src/main/frontend/src/store/sagas/index.ts` - Added fetchRecentTrackersSaga for loading tracker history
+- ✅ `src/main/frontend/src/services/graphql.ts` - Added GET_RECENT_TRACKERS query
+
+### Features Implemented
+
+**Upload Page Structure:**
+1. **Current Upload Status** (if active) - Shows ongoing upload with yellow/orange highlight
+2. **Upload Dropzone** - Drag & drop or click to select files (PDF, DOC, DOCX, ZIP)
+3. **Upload History Table** - Recent uploads from last 24 hours
+
+**Upload History Table:**
+- **Columns**: Status, Files, Progress, Started, Completed, Message, Actions
+- **Status Badges**: Color-coded (INITIATED=blue, PROCESSING=orange, COMPLETED=green, FAILED=red)
+- **Progress Bars**: Gradient progress indicators showing processed/total files
+- **Individual Refresh**: Per-row refresh button (🔄) to update specific tracker status
+- **Bulk Refresh**: "Refresh All" button to reload entire table
+- **Timestamps**: Human-readable date/time display
+- **Responsive Design**: Mobile-friendly table layout
+
+**State Management:**
+- Redux slice extension with trackers[] array
+- fetchingTrackers boolean for loading state
+- fetchRecentTrackers action dispatched on page mount
+- handleRefreshAll function for bulk refresh
+- Per-tracker refresh using existing fetchProcessStatus action
+
+### Backend Implementation
+
+**New GraphQL Resolver:**
+- ✅ `ProcessTrackerResolver.recentProcessTrackers(hours: Int!)` - Fetch trackers from last N hours
+- ✅ Uses `ProcessTrackerRepository.findByCreatedAtAfter(LocalDateTime)` query method
+
+**GraphQL Schema Updates:**
+- ✅ Changed `DateTime` scalar to `LocalDateTime` across all types
+- ✅ Added `recentProcessTrackers(hours: Int!): [ProcessTracker!]!` query
+- ✅ Updated ProcessTracker type with createdAt/updatedAt/completedAt fields
+
+**GraphQL Configuration Fix:**
+- ✅ Created custom LocalDateTime scalar with proper serialization
+- ✅ Replaced ExtendedScalars.DateTime with custom implementation
+- ✅ Fixed serialization error: "Can't serialize value...Expected OffsetDateTime but was LocalDateTime"
+- ✅ Implemented ISO-8601 string formatting for LocalDateTime values
+
+**Files Updated:**
+- ✅ `src/main/java/io/subbu/ai/firedrill/resolver/ProcessTrackerResolver.java` - Added recentProcessTrackers query method
+- ✅ `src/main/java/io/subbu/ai/firedrill/config/GraphQLConfig.java` - Custom LocalDateTime scalar implementation
+- ✅ `src/main/resources/graphql/schema.graphqls` - Changed DateTime to LocalDateTime (5 type definitions updated)
+
+### TypeScript Interface Updates
+
+**ProcessTracker Interface:**
+```typescript
+interface ProcessTracker {
+  id: string;
+  status: 'INITIATED' | 'EMBED_GENERATED' | 'VECTOR_DB_UPDATED' | 
+          'RESUME_ANALYZED' | 'COMPLETED' | 'FAILED';
+  totalFiles?: number;
+  processedFiles?: number;
+  failedFiles?: number;
+  message?: string;
+  uploadedFilename?: string;
+  // GraphQL fields (new)
+  createdAt?: string;
+  updatedAt?: string;
+  completedAt?: string;
+  // API fields (backward compatibility)
+  startTime?: string;
+  endTime?: string;
+}
+```
+
+### User Experience
+
+**Upload Flow:**
+1. Navigate to "Upload Resumes" page
+2. See current upload (if any) highlighted at top
+3. Drag & drop or select files in upload area
+4. View upload immediately appear in history table
+5. Click refresh button (🔄) to update status
+6. Click "Refresh All" to reload entire table
+7. View complete upload history from last 24 hours
+
+**Visual Design:**
+- Status badges with semantic colors
+- Gradient progress bars (purple to blue)
+- Hover effects on buttons and rows
+- Responsive table with horizontal scroll on mobile
+- Consistent spacing and typography
+- Clear separation between sections
+
+### Docker Deployment
+
+**Build & Deploy:**
+- ✅ Multi-stage Docker build with frontend included
+- ✅ All containers healthy (nginx, app, db)
+- ✅ Application running on https://localhost
+- ✅ GraphQL endpoint operational with LocalDateTime support
+- ✅ Upload history table showing real data from database
+
+### Testing Checklist
+
+- ✅ Upload history table loads with recent trackers
+- ✅ Status badges display correct colors
+- ✅ Progress bars show accurate percentages
+- ✅ Individual refresh buttons update specific rows
+- ✅ "Refresh All" button reloads entire table
+- ✅ Timestamps formatted correctly (LocalDateTime serialization)
+- ✅ Empty state shows "No recent uploads found"
+- ✅ Current upload highlighted in yellow/orange box
+- ✅ Upload dropzone remains accessible during uploads
+- ✅ Table responsive on different screen sizes
+- ✅ GraphQL queries return proper data structure
+- ✅ No console errors or GraphQL serialization errors
+- ✅ Docker containers all healthy and running
+
+### Technical Highlights
+
+- **GraphQL Integration**: Custom scalar type for LocalDateTime serialization
+- **State Management**: Redux Toolkit with Redux-Saga for async operations
+- **Component Architecture**: Reusable ProcessTrackerTable component
+- **Styling**: CSS Modules with gradient progress bars and status badges
+- **Type Safety**: Full TypeScript implementation with strict null checks
+- **Error Handling**: Graceful error display with user-friendly messages
+- **Performance**: Efficient re-rendering with React hooks
+- **Accessibility**: Semantic HTML and ARIA labels
+
+### Documentation
+
+**New Files:**
+- ✅ `docs/GRAPHQL-API.md` - Complete GraphQL API documentation (800+ lines)
+  - Request/response model explanation
+  - All queries with examples
+  - All mutations with examples
+  - Error handling patterns
+  - Frontend integration examples
+  - Best practices guide
+
+**Updated Files:**
+- ✅ `README.md` - Added upload tracking feature, GraphQL API reference
+- ✅ `CHANGELOG.md` - This comprehensive entry
+
+---
+
 ## ✅ Project Configuration Updates (February 16, 2026)
 
 **Status**: ✅ Completed
