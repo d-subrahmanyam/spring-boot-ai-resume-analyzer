@@ -1,0 +1,201 @@
+# GraphQL Schema for Resume Analyzer
+
+# Scalar types
+scalar UUID
+scalar DateTime
+scalar Upload
+
+# Enums
+enum ProcessStatus {
+    INITIATED
+    EMBED_GENERATED
+    VECTOR_DB_UPDATED
+    RESUME_ANALYZED
+    COMPLETED
+    FAILED
+}
+
+# Types
+type Skill {
+    id: UUID!
+    name: String!
+    category: String
+    description: String
+    isActive: Boolean!
+    createdAt: DateTime!
+    updatedAt: DateTime!
+}
+
+type Candidate {
+    id: UUID!
+    name: String!
+    email: String
+    mobile: String
+    resumeFilename: String
+    experienceSummary: String
+    skills: String
+    domainKnowledge: String
+    academicBackground: String
+    yearsOfExperience: Int
+    createdAt: DateTime!
+    updatedAt: DateTime!
+    matches: [CandidateMatch!]
+}
+
+type JobRequirement {
+    id: UUID!
+    title: String!
+    description: String
+    requiredSkills: String
+    skills: [Skill!]
+    minExperienceYears: Int
+    maxExperienceYears: Int
+    requiredEducation: String
+    domainRequirements: String
+    location: String
+    isActive: Boolean!
+    createdAt: DateTime!
+    updatedAt: DateTime!
+    matches: [CandidateMatch!]
+}
+
+type CandidateMatch {
+    id: UUID!
+    candidate: Candidate!
+    jobRequirement: JobRequirement!
+    matchScore: Float
+    skillsScore: Float
+    experienceScore: Float
+    educationScore: Float
+    domainScore: Float
+    matchExplanation: String
+    isSelected: Boolean!
+    isShortlisted: Boolean!
+    recruiterNotes: String
+    createdAt: DateTime!
+}
+
+type ProcessTracker {
+    id: UUID!
+    status: ProcessStatus!
+    totalFiles: Int
+    processedFiles: Int
+    failedFiles: Int
+    message: String
+    uploadedFilename: String
+    createdAt: DateTime!
+    updatedAt: DateTime!
+    completedAt: DateTime
+}
+
+# Input types
+input JobRequirementInput {
+    title: String!
+    description: String
+    requiredSkills: String
+    skillIds: [UUID!]
+    minExperience: Int
+    maxExperience: Int
+    requiredEducation: String
+    domain: String
+    location: String
+}
+
+input SkillInput {
+    name: String!
+    category: String
+    description: String
+}
+
+input UpdateCandidateMatchInput {
+    isSelected: Boolean
+    isShortlisted: Boolean
+    recruiterNotes: String
+}
+
+# Queries
+type Query {
+    # Candidate queries
+    candidate(id: UUID!): Candidate
+    allCandidates: [Candidate!]!
+    searchCandidatesByName(name: String!): [Candidate!]!
+    searchCandidatesBySkill(skill: String!): [Candidate!]!
+    candidatesByExperienceRange(minYears: Int!, maxYears: Int!): [Candidate!]!
+    
+    # Skill queries
+    skill(id: UUID!): Skill
+    allSkills: [Skill!]!
+    activeSkills: [Skill!]!
+    searchSkills(name: String!): [Skill!]!
+    skillsByCategory(category: String!): [Skill!]!
+    skillCategories: [String!]!
+    
+    # Job requirement queries
+    jobRequirement(id: UUID!): JobRequirement
+    allJobRequirements: [JobRequirement!]!
+    activeJobRequirements: [JobRequirement!]!
+    searchJobsByTitle(title: String!): [JobRequirement!]!
+    
+    # Candidate match queries
+    matchesForCandidate(candidateId: UUID!): [CandidateMatch!]!
+    matchesForJob(jobRequirementId: UUID!): [CandidateMatch!]!
+    topMatchesForJob(jobRequirementId: UUID!, limit: Int, minScore: Float): [CandidateMatch!]!
+    selectedCandidatesForJob(jobRequirementId: UUID!): [CandidateMatch!]!
+    shortlistedCandidatesForJob(jobRequirementId: UUID!): [CandidateMatch!]!
+    
+    # Process tracker queries
+    processStatus(trackerId: UUID!): ProcessTracker
+    allProcessTrackers: [ProcessTracker!]!
+    recentProcessTrackers(hours: Int!): [ProcessTracker!]!
+}
+
+# Mutations
+type Mutation {
+    # Job requirement mutations
+    createJobRequirement(
+        title: String!
+        description: String
+        requiredSkills: String
+        skillIds: [UUID!]
+        minExperience: Int
+        maxExperience: Int
+        requiredEducation: String
+        domain: String
+        location: String
+    ): JobRequirement!
+    updateJobRequirement(
+        id: UUID!
+        title: String
+        description: String
+        requiredSkills: String
+        skillIds: [UUID!]
+        minExperience: Int
+        maxExperience: Int
+        requiredEducation: String
+        domain: String
+        location: String
+        isActive: Boolean
+    ): JobRequirement!
+    deactivateJobRequirement(id: UUID!): JobRequirement!
+    deleteJobRequirement(id: UUID!): Boolean!
+    
+    # Skill mutations
+    createSkill(name: String!, category: String, description: String): Skill!
+    updateSkill(id: UUID!, name: String, category: String, description: String, isActive: Boolean): Skill!
+    deleteSkill(id: UUID!): Boolean!
+    
+    # Candidate matching mutations
+    matchCandidateToJob(candidateId: UUID!, jobRequirementId: UUID!): CandidateMatch!
+    matchAllCandidatesToJob(jobRequirementId: UUID!): [CandidateMatch!]!
+    matchCandidateToAllJobs(candidateId: UUID!): [CandidateMatch!]!
+    updateCandidateMatch(matchId: UUID!, input: UpdateCandidateMatchInput!): CandidateMatch!
+    
+    # Candidate mutations
+    deleteCandidate(id: UUID!): Boolean!
+}
+
+# Schema
+schema {
+    query: Query
+    mutation: Mutation
+}

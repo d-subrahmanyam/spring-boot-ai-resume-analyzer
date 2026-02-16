@@ -1,0 +1,126 @@
+spring:
+  application:
+    name: resume-analyzer
+  
+  datasource:
+    url: jdbc:postgresql://localhost:5432/resume_analyzer
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+  
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        jdbc:
+          lob:
+            non_contextual_creation: true
+  
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 50MB
+      max-request-size: 100MB
+  
+  graphql:
+    graphiql:
+      enabled: true
+      path: /graphiql
+    path: /graphql
+    schema:
+      printer:
+        enabled: true
+  
+  ai:
+    openai:
+      base-url: ${LLM_STUDIO_BASE_URL:http://localhost:1234/v1}
+      api-key: ${LLM_STUDIO_API_KEY:not-needed}
+      chat:
+        options:
+          model: ${LLM_STUDIO_MODEL:mistralai/mistral-7b-instruct-v0.3}
+          temperature: 0.7
+          max-tokens: 2000
+      embedding:
+        options:
+          model: ${LLM_STUDIO_EMBEDDING_MODEL:text-embedding-nomic-embed-text-v1.5}
+
+# Application AI Configuration
+ai:
+  llm:
+    timeout: 120000
+    retry-attempts: 3
+
+# Application Configuration
+app:
+  upload:
+    directory: ${UPLOAD_DIR:./uploads}
+    allowed-extensions: .doc,.docx,.pdf
+  
+  embedding:
+    dimension: 768
+    batch-size: 10
+  
+  processing:
+    thread-pool-size: 5
+    max-retries: 3
+
+# Server Configuration
+server:
+  port: 8080
+  compression:
+    enabled: true
+    mime-types: 
+      - text/html
+      - text/xml
+      - text/plain
+      - text/css
+      - text/javascript
+      - application/javascript
+      - application/json
+    min-response-size: 1024
+
+# Logging Configuration
+logging:
+  level:
+    io.subbu.ai.firedrill: DEBUG
+    org.springframework.web: INFO
+    org.hibernate: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: logs/resume-analyzer.log
+    max-size: 10MB
+    max-history: 30
+
+# Spring Boot Actuator Configuration
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+      base-path: /actuator
+  endpoint:
+    health:
+      enabled: true
+      show-details: when-authorized
+      probes:
+        enabled: true
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+    db:
+      enabled: true
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+  info:
+    env:
+      enabled: true

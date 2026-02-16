@@ -1,0 +1,269 @@
+.matching h2 {
+  font-size: 2rem;
+  color: #2d3748;
+  margin-bottom: 2rem;
+}
+
+.controls {
+  background: white;
+  padding: 1.5rem;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  margin-bottom: 2rem;
+  display: flex;
+  gap: 1rem;
+  align-items: flex-end;
+}
+
+.jobSelect {
+  flex: 1;
+}
+
+.jobSelect label {
+  display: block;
+  font-weight: 600;
+  color: #4a5568;
+  margin-bottom: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.select {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #cbd5e0;
+  border-radius: 6px;
+  font-size: 1rem;
+}
+
+.matchButton {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 6px;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity 0.2s;
+}
+
+.matchButton:hover {
+  opacity: 0.9;
+}
+
+.matchButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.jobInfo {
+  background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+  color: white;
+  padding: 1.5rem;
+  border-radius: 8px;
+  margin-bottom: 2rem;
+}
+
+.jobInfo h3 {
+  font-size: 1.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.jobInfo p {
+  margin: 0.5rem 0;
+}
+
+.empty {
+  background: white;
+  padding: 3rem;
+  border-radius: 8px;
+  text-align: center;
+  color: #718096;
+  font-size: 1.125rem;
+}
+
+.matchList {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.matchCard {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.matchCard:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.matchHeader {
+  padding: 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.matchHeader h4 {
+  font-size: 1.25rem;
+  color: #2d3748;
+  margin: 0 0 0.25rem 0;
+}
+
+.email {
+  color: #718096;
+  font-size: 0.875rem;
+}
+
+.score {
+  font-size: 2rem;
+  font-weight: 700;
+  padding: 0.5rem 1.5rem;
+  border-radius: 8px;
+}
+
+.excellent {
+  background: #c6f6d5;
+  color: #22543d;
+}
+
+.good {
+  background: #bee3f8;
+  color: #2c5282;
+}
+
+.average {
+  background: #feebc8;
+  color: #7c2d12;
+}
+
+.poor {
+  background: #fed7d7;
+  color: #742a2a;
+}
+
+.scoreBreakdown {
+  padding: 1.5rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.scoreItem {
+  display: grid;
+  grid-template-columns: 100px 1fr 60px;
+  align-items: center;
+  gap: 1rem;
+}
+
+.scoreItem > span:first-child {
+  font-weight: 600;
+  color: #4a5568;
+  font-size: 0.875rem;
+}
+
+.scoreItem > span:last-child {
+  text-align: right;
+  font-weight: 600;
+  color: #2d3748;
+}
+
+.scoreBar {
+  height: 12px;
+  background: #e2e8f0;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.scoreFill {
+  height: 100%;
+  background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+  border-radius: 6px;
+  transition: width 0.3s ease;
+}
+
+.explanation {
+  padding: 1.5rem;
+  background: #f7fafc;
+  border-top: 1px solid #e2e8f0;
+}
+
+.explanation strong {
+  display: block;
+  color: #4a5568;
+  margin-bottom: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.explanation p {
+  color: #2d3748;
+  line-height: 1.6;
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.matchActions {
+  padding: 1rem 1.5rem;
+  background: #f7fafc;
+  display: flex;
+  gap: 1rem;
+}
+
+.shortlistButton,
+.selectButton {
+  flex: 1;
+  padding: 0.75rem;
+  border-radius: 6px;
+  border: none;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.shortlistButton {
+  background: #e2e8f0;
+  color: #2d3748;
+}
+
+.shortlistButton:hover {
+  background: #cbd5e0;
+}
+
+.selectButton {
+  background: #e2e8f0;
+  color: #2d3748;
+}
+
+.selectButton:hover {
+  background: #cbd5e0;
+}
+
+.shortlisted {
+  flex: 1;
+  padding: 0.75rem;
+  border-radius: 6px;
+  border: none;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+  color: white;
+}
+
+.selected {
+  flex: 1;
+  padding: 0.75rem;
+  border-radius: 6px;
+  border: none;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
