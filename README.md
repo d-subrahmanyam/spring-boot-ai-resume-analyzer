@@ -4,6 +4,14 @@
 
 Resume Analyzer is an AI-powered application that analyzes resumes, extracts candidate information, and matches candidates to job requirements using local LLM (Large Language Model) capabilities.
 
+## Recent Updates (February 16, 2026)
+
+- **📚 GraphQL API Documentation**: Comprehensive API reference with sequence diagrams and examples ([docs/GRAPHQL-API.md](docs/GRAPHQL-API.md))
+- **📸 Visual Documentation**: Added 6 feature screenshots showcasing the application UI
+- **🔧 Bug Fix**: Fixed GraphQL OffsetDateTime serialization issue in Skills Master page
+- **📦 Dependencies**: Updated Lombok to 1.18.36 and Maven Compiler Plugin to 3.13.0
+- **📝 Documentation**: Added UPLOAD-UI-FIX.md documenting upload state management improvements
+
 ## Screenshots
 
 ### Dashboard
@@ -367,7 +375,8 @@ The Maven build:
 Comprehensive documentation is available in the `docs/` folder:
 
 - **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** - System architecture with 15+ UML diagrams
-- **[GRAPHQL-API.md](docs/GRAPHQL-API.md)** - Complete GraphQL API reference with examples
+- **[GRAPHQL-API.md](docs/GRAPHQL-API.md)** - Complete GraphQL API reference with request/response flow sequence diagram
+- **[UPLOAD-UI-FIX.md](docs/UPLOAD-UI-FIX.md)** - Upload state management fix documentation
 - **[NEXT-STEPS.md](docs/NEXT-STEPS.md)** - Complete roadmap with 7 implementation phases
 - **[PROJECT-SUMMARY.md](docs/PROJECT-SUMMARY.md)** - Complete feature overview
 - **[LLM-STUDIO-SETUP.md](docs/LLM-STUDIO-SETUP.md)** - LM Studio configuration guide

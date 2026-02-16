@@ -1,5 +1,92 @@
 # Resume Analyzer - Change Summary
 
+## 🔧 GraphQL API Documentation & Bug Fixes (February 16, 2026)
+
+**Status**: ✅ Complete  
+**Features**: Comprehensive API documentation, GraphQL serialization fix, visual documentation
+
+### Documentation Enhancements
+
+**New Documentation Files:**
+- ✅ `docs/GRAPHQL-API.md` - Comprehensive GraphQL API reference (1120 lines)
+  - Complete request/response model documentation
+  - Mermaid sequence diagram showing request processing flow
+  - All 20+ queries with examples and response structures
+  - All 15+ mutations with input/output examples
+  - Error handling patterns and best practices
+  - Frontend integration examples using graphql-request
+  - Scalar type definitions (UUID, LocalDateTime, Upload)
+
+- ✅ `docs/UPLOAD-UI-FIX.md` - Upload state management fix documentation
+  - Detailed problem analysis and root cause
+  - Fix implementation with code examples
+  - Testing validation steps
+
+**README Updates:**
+- ✅ Added Screenshots section with 6 application feature images:
+  - Dashboard with stats and quick actions
+  - Upload tracking with dual-component UI
+  - Candidates list page
+  - Job creation form with skills autocomplete and range slider
+  - Skills master data management table
+  - Candidate matching interface
+- ✅ Added reference to GraphQL API documentation
+- ✅ Enhanced Resume Upload & Processing section
+
+**CHANGELOG Updates:**
+- ✅ Documented upload progress tracking feature (200+ lines)
+- ✅ Added skills autocomplete and master data management features
+
+### Bug Fixes
+
+**GraphQL OffsetDateTime Serialization Fix:**
+- **File**: `src/main/java/io/subbu/ai/firedrill/config/GraphQLConfig.java`
+- **Issue**: Skills Master page showing "Failed to load skills" error
+- **Root Cause**: LocalDateTime scalar couldn't serialize OffsetDateTime fields (createdAt, updatedAt) from entities
+- **Fix**: Updated GraphQL scalar to handle both LocalDateTime and OffsetDateTime
+  - Added OffsetDateTime import
+  - Modified serialize() method to convert OffsetDateTime to LocalDateTime
+  - Validated with Playwright browser automation
+- **Result**: Skills Master now displays 57 skills correctly with pagination
+
+**Validation:**
+- ✅ Tested Skills Master page - table loads correctly
+- ✅ Tested skills autocomplete in job creation - suggestions appear correctly
+- ✅ No GraphQL serialization errors in console
+
+### Dependency Updates
+
+**Maven Dependencies:**
+- ✅ Updated Lombok: `1.18.34` → `1.18.36`
+- ✅ Updated Maven Compiler Plugin: `3.11.0` → `3.13.0`
+- ✅ Added JDK compiler args for Java 21 compatibility (10 new args for module access)
+
+**Configuration Updates:**
+- ✅ Added `.playwright-mcp/` to .gitignore for Playwright browser automation artifacts
+- ✅ Added `test-*.ps1` and `test-*.txt` to .gitignore for test files
+
+### Visual Documentation
+
+**Screenshots Captured:**
+All screenshots taken using Playwright MCP browser automation tools and stored in `docs/images/`:
+- ✅ `dashboard.png` - System overview with statistics
+- ✅ `upload-tracking.png` - File upload with progress history
+- ✅ `candidates-list.png` - Candidate management interface
+- ✅ `job-creation-form.png` - Job requirements form with skills autocomplete
+- ✅ `skills-master.png` - Skills master data table with 57 skills
+- ✅ `candidate-matching.png` - AI-powered matching interface
+
+### Testing & Validation
+
+**Playwright Browser Automation:**
+- ✅ Validated all UI features using Microsoft Playwright MCP extension
+- ✅ Captured screenshots of all major application features
+- ✅ Verified skills autocomplete functionality
+- ✅ Confirmed GraphQL queries execute successfully
+- ✅ No console errors during navigation
+
+---
+
 ## ✅ Upload Progress Tracking Feature (February 16, 2026)
 
 **Status**: ✅ Complete and tested  
