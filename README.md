@@ -4,8 +4,12 @@
 
 Resume Analyzer is an AI-powered application that analyzes resumes, extracts candidate information, and matches candidates to job requirements using local LLM (Large Language Model) capabilities.
 
-## Recent Updates (February 16, 2026)
+## Recent Updates (February 17, 2026)
 
+- **🧪 E2E Testing Framework**: Comprehensive Playwright test suite with 89 test cases across 6 specifications ([tests/e2e/README.md](src/main/frontend/tests/e2e/README.md))
+  - Multi-browser testing (Chromium, Firefox, WebKit, Mobile Chrome, Mobile Safari)
+  - Complete UI validation for all features (dashboard, upload, candidates, jobs, skills, matching)
+  - Test scripts: `test:e2e`, `test:e2e:ui`, `test:e2e:headed`, `test:e2e:debug`
 - **📚 GraphQL API Documentation**: Comprehensive API reference with sequence diagrams and examples ([docs/GRAPHQL-API.md](docs/GRAPHQL-API.md))
 - **📸 Visual Documentation**: Added 6 feature screenshots showcasing the application UI
 - **🔧 Bug Fix**: Fixed GraphQL OffsetDateTime serialization issue in Skills Master page
@@ -197,6 +201,73 @@ yarn test
 - AI-powered scoring (skills, experience, education, domain)
 - Shortlist and selection management
 - Match explanations
+
+## Testing
+
+### End-to-End Tests (Playwright)
+
+Comprehensive E2E test suite with 89 test cases validating all UI features.
+
+**Running Tests:**
+
+```bash
+# Navigate to frontend directory
+cd src/main/frontend
+
+# Install dependencies (first time)
+yarn install
+npx playwright install
+
+# Run all E2E tests (headless)
+yarn test:e2e
+
+# Run tests with UI mode (interactive)
+yarn test:e2e:ui
+
+# Run tests in headed mode (see browser)
+yarn test:e2e:headed
+
+# Run tests in debug mode
+yarn test:e2e:debug
+
+# Run specific test file
+npx playwright test dashboard.spec.ts
+
+# Run on specific browser
+npx playwright test --project=chromium
+```
+
+**Test Coverage:**
+
+| Test Suite | Test Count | Features Covered |
+|------------|------------|------------------|
+| Dashboard | 7 | Navigation, statistics, routing |
+| Skills Master | 10 | CRUD operations, pagination, icons |
+| Job Requirements | 11 | Autocomplete, slider, badges |
+| File Upload | 18 | Progress tracking, dual-component UI |
+| Candidates | 23 | Listing, search, filtering, actions |
+| Candidate Matching | 20 | Scoring, skill highlighting |
+| **Total** | **89** | **Complete application workflow** |
+
+**Multi-Browser Support:**
+- Chromium (Desktop)
+- Firefox (Desktop)
+- WebKit (Desktop - Safari engine)
+- Mobile Chrome (Android simulation)
+- Mobile Safari (iOS simulation)
+
+**Test Reports:**
+```bash
+# View HTML report after test run
+npx playwright show-report
+
+# View trace for failed test
+npx playwright show-trace trace.zip
+```
+
+📖 **Complete Testing Guide**: [tests/e2e/README.md](src/main/frontend/tests/e2e/README.md)
+
+---
 
 ## API Documentation
 
