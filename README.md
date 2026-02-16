@@ -4,6 +4,38 @@
 
 Resume Analyzer is an AI-powered application that analyzes resumes, extracts candidate information, and matches candidates to job requirements using local LLM (Large Language Model) capabilities.
 
+## Screenshots
+
+### Dashboard
+The main dashboard provides an overview of system statistics and quick access to key features.
+
+![Dashboard](docs/images/dashboard.png)
+
+### Resume Upload & Tracking
+Upload resumes with real-time progress tracking and view upload history.
+
+![Upload Tracking](docs/images/upload-tracking.png)
+
+### Candidates List
+Browse and manage all uploaded candidate profiles.
+
+![Candidates List](docs/images/candidates-list.png)
+
+### Job Requirements
+Create and manage job requirements with skills auto-complete and experience range selection.
+
+![Job Creation Form](docs/images/job-creation-form.png)
+
+### Skills Master
+Centralized skills management system for maintaining standardized skill names.
+
+![Skills Master](docs/images/skills-master.png)
+
+### Candidate Matching
+AI-powered candidate matching against job requirements.
+
+![Candidate Matching](docs/images/candidate-matching.png)
+
 ## Architecture
 
 ### Backend Stack
