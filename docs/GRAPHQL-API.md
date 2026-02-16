@@ -4,6 +4,82 @@
 
 The Resume Analyzer uses GraphQL as its primary API for querying and mutating data. This document explains the request/response model, query structure, and provides examples for all available operations.
 
+## Request Processing Flow
+
+The following sequence diagram illustrates how GraphQL requests are processed in the Resume Analyzer application:
+
+```mermaid
+sequenceDiagram
+    participant Client as Client Application
+    participant Nginx as Nginx Reverse Proxy
+    participant Spring as Spring Boot App
+    participant GQLEngine as GraphQL Engine
+    participant Resolver as GraphQL Resolver
+    participant Service as Service Layer
+    participant Repository as JPA Repository
+    participant DB as PostgreSQL Database
+
+    Client->>Nginx: POST /graphql<br/>{query, variables}
+    Nginx->>Spring: Forward to :8080/graphql
+    Spring->>GQLEngine: Parse GraphQL request
+    
+    alt Valid Query/Mutation
+        GQLEngine->>GQLEngine: Validate schema
+        GQLEngine->>GQLEngine: Parse operation
+        GQLEngine->>Resolver: Route to appropriate resolver<br/>(Query/Mutation mapping)
+        
+        alt Query Operation
+            Resolver->>Service: Call service method<br/>(e.g., getAllCandidates())
+            Service->>Repository: Execute JPA query
+            Repository->>DB: SELECT query
+            DB-->>Repository: Return result set
+            Repository-->>Service: Return entities
+            Service-->>Resolver: Return processed data
+        else Mutation Operation
+            Resolver->>Service: Call service method<br/>(e.g., createSkill())
+            Service->>Service: Validate input
+            Service->>Repository: Save/Update entity
+            Repository->>DB: INSERT/UPDATE query
+            DB-->>Repository: Confirm transaction
+            Repository-->>Service: Return saved entity
+            Service-->>Resolver: Return processed data
+        end
+        
+        Resolver->>GQLEngine: Return resolved data
+        GQLEngine->>GQLEngine: Apply field selection
+        GQLEngine->>Spring: Build response object
+        Spring->>Nginx: JSON response<br/>{data: {...}}
+        Nginx->>Client: Return response
+        
+    else Invalid Request
+        GQLEngine->>GQLEngine: Schema validation failed
+        GQLEngine->>Spring: Build error response
+        Spring->>Nginx: JSON response<br/>{errors: [...]}
+        Nginx->>Client: Return error response
+    end
+```
+
+### Key Components
+
+1. **Client Application**: React frontend or any GraphQL client making requests
+2. **Nginx Reverse Proxy**: Routes HTTPS requests to backend (production only)
+3. **Spring Boot App**: Handles HTTP requests at `/graphql` endpoint
+4. **GraphQL Engine**: Spring GraphQL library that parses and validates queries
+5. **GraphQL Resolver**: Controller classes annotated with `@QueryMapping` or `@MutationMapping`
+6. **Service Layer**: Business logic layer that processes operations
+7. **JPA Repository**: Spring Data repositories for database access
+8. **PostgreSQL Database**: Persistent data storage with pgvector extension
+
+### Request Flow Details
+
+- **Parsing**: GraphQL engine parses the query string and validates against schema
+- **Validation**: Checks field existence, type compatibility, and argument requirements
+- **Routing**: Maps operation to appropriate resolver method based on `@QueryMapping` or `@MutationMapping`
+- **Execution**: Resolver calls service layer to execute business logic
+- **Data Access**: Service uses JPA repositories to interact with database
+- **Field Selection**: GraphQL engine applies field selection to return only requested fields
+- **Response Building**: Constructs JSON response with `data` object or `errors` array
+
 ## GraphQL Endpoint
 
 **URL**: `https://localhost/graphql` (Production) or `http://localhost:8080/graphql` (Development)  
