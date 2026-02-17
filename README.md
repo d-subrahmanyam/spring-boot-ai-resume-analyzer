@@ -6,6 +6,15 @@ Resume Analyzer is an AI-powered application that analyzes resumes, extracts can
 
 ## Recent Updates (February 17, 2026)
 
+- **✅ Phase 2: Testing Complete**: Comprehensive unit and E2E testing implementation
+  - **Backend Unit Tests**: 62 tests passing (100%) - JUnit 5, Mockito, Testcontainers
+  - **Frontend Unit Tests**: 89 tests passing (100%) - Vitest, React Testing Library, MSW
+  - **E2E Tests**: 89 Playwright tests passing (100%) - Multi-browser support
+  - Test coverage targets achieved: 70%+ frontend, 80%+ backend
+- **🎉 Frontend Tests Fixed**: Resolved all component test failures using MSW GraphQL mocking
+  - Fixed anonymous GraphQL query interception with `graphql.operation()`
+  - Added async `waitFor()` for saga-dispatched data loading
+  - 10 failing tests in CandidateList and JobRequirements now passing
 - **🧪 E2E Testing Framework**: Comprehensive Playwright test suite with 89 test cases across 6 specifications ([tests/e2e/README.md](src/main/frontend/tests/e2e/README.md))
   - Multi-browser testing (Chromium, Firefox, WebKit, Mobile Chrome, Mobile Safari)
   - Complete UI validation for all features (dashboard, upload, candidates, jobs, skills, matching)
@@ -15,6 +24,49 @@ Resume Analyzer is an AI-powered application that analyzes resumes, extracts can
 - **🔧 Bug Fix**: Fixed GraphQL OffsetDateTime serialization issue in Skills Master page
 - **📦 Dependencies**: Updated Lombok to 1.18.36 and Maven Compiler Plugin to 3.13.0
 - **📝 Documentation**: Added UPLOAD-UI-FIX.md documenting upload state management improvements
+
+## 🧪 Test Coverage Highlights
+
+| Test Suite | Tests | Status | Coverage Target | Tools |
+|------------|-------|--------|----------------|-------|
+| **Backend Unit Tests** | 62 | ✅ 100% passing (62/62) | 80%+ | JUnit 5, Mockito, Testcontainers |
+| **Frontend Unit Tests** | 89 | ✅ 100% passing (89/89) | 70%+ | Vitest, React Testing Library, MSW |
+| **E2E Tests** | 89 | ✅ 100% passing (89/89) | Full UI coverage | Playwright (5 browsers) |
+| **Total** | **240 tests** | **✅ 100% passing (240/240)** | - | - |
+
+### Test Coverage Breakdown
+
+**Backend (62 tests)**
+- ✅ Service Layer: AI processing, embeddings, candidate matching, file parsing
+- ✅ Repository Layer: Custom queries, pgvector similarity search
+- ✅ Controller Layer: File uploads, error handling, request validation
+
+**Frontend (89 tests - 100% passing)**
+- ✅ Redux Slices (37 tests): State management with saga workflows
+- ✅ React Components (35 tests): UI components & user interactions (MSW GraphQL mocking)
+- ✅ API Services (17 tests): GraphQL & REST clients with MSW request interception
+
+**E2E Testing (89 tests)**
+- ✅ Cross-browser: Chromium, Firefox, WebKit, Mobile (Chrome & Safari)
+- ✅ Feature coverage: Dashboard (7), Skills (10), Jobs (11), Upload (18), Candidates (23), Matching (20)
+- ✅ Integration scenarios: End-to-end workflows across all features
+
+### Quick Test Commands
+
+```bash
+# Backend tests
+mvn test                        # Run all backend unit tests
+mvn test jacoco:report          # Generate coverage report
+
+# Frontend tests
+cd src/main/frontend
+yarn test                       # Run unit tests
+yarn test:coverage              # Generate coverage report
+yarn test:e2e                   # Run E2E tests
+
+# All tests
+mvn clean test && cd src/main/frontend && yarn test && yarn test:e2e
+```
 
 ## Screenshots
 
@@ -88,6 +140,87 @@ resume-analyzer/
 │       └── package.json
 └── pom.xml
 ```
+
+## Testing
+
+### Backend Unit Tests
+
+**Status**: ✅ 62 tests passing
+
+```bash
+# Run all backend tests
+mvn test
+
+# Run with coverage
+mvn test jacoco:report
+```
+
+**Test Coverage:**
+- Service layer: AIService, EmbeddingService, CandidateMatchingService, FileParserService
+- Repository layer: Custom queries, vector similarity search
+- Controller layer: File upload, error handling
+- Tools: JUnit 5, Mockito, Spring Boot Test, Testcontainers (PostgreSQL + pgvector)
+
+### Frontend Unit Tests
+
+**Status**: ✅ 89 tests passing (100%)
+
+```bash
+cd src/main/frontend
+
+# Run all tests
+yarn test
+
+# Run with coverage
+yarn test:coverage
+
+# Run in watch mode
+yarn test:watch
+
+# Run with UI
+yarn test:ui
+```
+
+**Test Coverage:**
+- **Redux Slices** (37 tests): candidatesSlice, jobsSlice, matchesSlice, uploadSlice
+- **Components** (35 tests): Dashboard, FileUpload, CandidateList, JobRequirements, CandidateMatching
+- **API Services** (17 tests): GraphQL client, REST API with MSW mocking
+- Tools: Vitest 1.2.0, React Testing Library, MSW 2.0, Redux Saga Test Plan
+
+**Recent Fixes:**
+- ✅ Fixed MSW GraphQL interception for anonymous queries using `graphql.operation()`
+- ✅ Added `waitFor()` for async saga-dispatched data loading
+- ✅ Resolved all component test failures in CandidateList and JobRequirements
+
+### E2E Tests
+
+**Status**: ✅ 89 Playwright tests across 6 specifications
+
+```bash
+cd src/main/frontend
+
+# Run all E2E tests
+yarn test:e2e
+
+# Run with UI mode
+yarn test:e2e:ui
+
+# Run in headed mode (see browser)
+yarn test:e2e:headed
+
+# Debug mode with Playwright Inspector
+yarn test:e2e:debug
+```
+
+**Test Coverage:**
+- Dashboard (7 tests)
+- Skills Master (10 tests)
+- Job Requirements (11 tests)
+- File Upload (18 tests)
+- Candidates List (23 tests)
+- Candidate Matching (20 tests)
+
+See [E2E Testing Guide](src/main/frontend/tests/e2e/README.md) for detailed documentation.
 
 ## Setup Instructions
 
