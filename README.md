@@ -6,6 +6,11 @@ Resume Analyzer is an AI-powered application that analyzes resumes, extracts can
 
 ## Recent Updates (February 17, 2026)
 
+- **🗺️ Future Enhancements Roadmap**: Comprehensive 4-phase development plan with 50+ enhancement proposals ([docs/FUTURE-ENHANCEMENTS.md](docs/FUTURE-ENHANCEMENTS.md))
+  - 9 enhancement categories: AI, Analytics, Workflow, UI/UX, Security, Performance, Integrations, ML, BI
+  - Detailed specifications with technical approaches, resource requirements, and cost estimates
+  - Implementation timeline: 18-month roadmap from quick wins to enterprise features
+  - Success metrics, KPIs, and risk assessment per phase
 - **✅ Phase 2: Testing Complete**: Comprehensive unit and E2E testing implementation
   - **Backend Unit Tests**: 62 tests passing (100%) - JUnit 5, Mockito, Testcontainers
   - **Frontend Unit Tests**: 89 tests passing (100%) - Vitest, React Testing Library, MSW
@@ -580,6 +585,7 @@ Comprehensive documentation is available in the `docs/` folder:
 
 - **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** - System architecture with 15+ UML diagrams
 - **[GRAPHQL-API.md](docs/GRAPHQL-API.md)** - Complete GraphQL API reference with request/response flow sequence diagram
+- **[FUTURE-ENHANCEMENTS.md](docs/FUTURE-ENHANCEMENTS.md)** - Comprehensive roadmap with 50+ enhancement proposals across 9 categories
 - **[UPLOAD-UI-FIX.md](docs/UPLOAD-UI-FIX.md)** - Upload state management fix documentation
 - **[NEXT-STEPS.md](docs/NEXT-STEPS.md)** - Complete roadmap with 7 implementation phases
 - **[PROJECT-SUMMARY.md](docs/PROJECT-SUMMARY.md)** - Complete feature overview
@@ -588,6 +594,53 @@ Comprehensive documentation is available in the `docs/` folder:
 - **[SKILLS-MANAGEMENT.md](docs/SKILLS-MANAGEMENT.md)** - Skills master data management
 - **[.env.example](docs/.env.example)** - Environment variables template
 - **[resume-analyzer.md](docs/resume-analyzer.md)** - Original requirements
+
+## Future Enhancements
+
+This project has a comprehensive roadmap for future development. See **[FUTURE-ENHANCEMENTS.md](docs/FUTURE-ENHANCEMENTS.md)** for detailed enhancement proposals.
+
+### Quick Overview
+
+**📋 Enhancement Categories:**
+- 🤖 **AI & Matching**: Advanced scoring, resume intelligence, smart recommendations
+- 📊 **Analytics**: Recruitment dashboards, predictive analytics, market intelligence
+- 🔄 **Workflow**: ATS integration, communication automation, smart pipelines
+- 🎨 **UI/UX**: Enhanced search, data visualization, mobile PWA
+- 🔒 **Security**: GDPR compliance, RBAC, audit trails
+- ⚡ **Performance**: Bulk processing, multi-format support, caching
+- 🔌 **Integrations**: Job boards, HR systems, communication tools
+- 🧠 **AI Models**: Custom training, advanced NLP, multi-language support
+- 📈 **Business Intelligence**: Market trends, forecasting, planning
+
+### Implementation Roadmap
+
+| Phase | Timeline | Focus | Key Deliverables |
+|-------|----------|-------|------------------|
+| **Phase 1** | 1-3 months | Quick Wins | Bulk upload, email automation, enhanced search, caching |
+| **Phase 2** | 3-6 months | Core Enhancements | Advanced scoring, RBAC, analytics, GDPR compliance |
+| **Phase 3** | 6-12 months | Strategic Growth | ATS integration, predictive analytics, mobile PWA |
+| **Phase 4** | 12-18 months | Enterprise Scale | Microservices, multi-language, HR integrations |
+
+**🎯 Top 5 Quick Wins (High Impact, Low Effort):**
+1. Bulk resume upload & processing (3-4 weeks)
+2. Email templates & automation (3-4 weeks)
+3. Enhanced search with saved searches (2-3 weeks)
+4. Interactive data visualization (2-3 weeks)
+5. Redis caching layer (2-3 weeks)
+
+**🚀 Top 5 Strategic Initiatives:**
+1. Advanced multi-dimensional candidate scoring
+2. ATS integration (Greenhouse, Lever, Workday)
+3. Predictive analytics (acceptance rate, retention, performance)
+4. GDPR compliance suite
+5. Custom ML model training on company data
+
+**📖 Full Documentation**: [docs/FUTURE-ENHANCEMENTS.md](docs/FUTURE-ENHANCEMENTS.md)
+- Detailed feature specifications
+- Technical implementation approaches
+- Resource requirements & cost estimates
+- Success metrics & KPIs
+- Risk assessment
 
 ## Contributing
 
