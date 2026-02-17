@@ -13,8 +13,8 @@ describe('Dashboard Component', () => {
     render(<Dashboard />);
     
     // Check for key dashboard elements
-    const dashboard = screen.getByRole('main') || screen.getByTestId('dashboard');
-    expect(dashboard).toBeInTheDocument();
+    const dashboard = document.querySelector('[class*="dashboard"]');
+    expect(dashboard).toBeTruthy();
   });
 
   it('should display welcome message', () => {

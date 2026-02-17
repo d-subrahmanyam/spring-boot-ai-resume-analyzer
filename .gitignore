@@ -57,6 +57,9 @@ tmp/
 
 # Playwright artifacts
 .playwright-mcp/
+.specify/
+playwright-report/
+test-results/
 
 # Test files
 test-*.ps1
