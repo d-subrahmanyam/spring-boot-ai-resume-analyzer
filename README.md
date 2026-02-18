@@ -4,8 +4,22 @@
 
 Resume Analyzer is an AI-powered application that analyzes resumes, extracts candidate information, and matches candidates to job requirements using local LLM (Large Language Model) capabilities.
 
-## Recent Updates (February 17, 2026)
+## Recent Updates (February 18, 2026)
 
+- **🔐 Phase 3: RBAC Implementation Complete**: Full Role-Based Access Control system with 4 roles (Admin, Recruiter, HR, Hiring Manager)
+  - JWT-based authentication with Spring Security — login/logout flow, token refresh
+  - 4 roles with granular permissions: Admin (full), Recruiter (jobs+candidates), HR (employees+candidates), Hiring Manager (read-only jobs/matching)
+  - Frontend RBAC guards: `ProtectedRoute` and `RoleBasedRoute` components, `authSelectors` for per-role UI gating
+  - Backend security: `SecurityConfig`, `JwtAuthenticationFilter`, `JwtTokenProvider`, `UserDetailsServiceImpl`
+  - New pages: Login, Admin Dashboard, User Management, Employee Management, Unauthorized
+  - New entities: `User`, `Employee`, `Feedback`, `AuditLog`, `SystemHealth`, `JobQueue`
+  - New resolvers: `UserResolver`, `EmployeeResolver`, `FeedbackResolver`, `SystemHealthResolver`
+  - Validated all 4 roles end-to-end with 15+ browser screenshots in `docs/images/`
+- **🐛 Bug Fix: GraphQL Candidate Field Mismatch**: Corrected field names in 3 queries and the `Candidate` TypeScript interface
+  - `experience` → `yearsOfExperience`, `education` → `academicBackground`, `summary` → `experienceSummary`
+  - Removed non-existent `currentCompany` field from queries and display
+  - Affected: `graphql.ts` (3 queries), `candidatesSlice.ts` (interface), `CandidateList.tsx` (display)
+- **📁 Test Data Organization**: Moved all sample resume files into `test-data/` folder for cleaner project structure
 - **🗺️ Future Enhancements Roadmap**: Comprehensive 4-phase development plan with 50+ enhancement proposals ([docs/FUTURE-ENHANCEMENTS.md](docs/FUTURE-ENHANCEMENTS.md))
   - 9 enhancement categories: AI, Analytics, Workflow, UI/UX, Security, Performance, Integrations, ML, BI
   - Detailed specifications with technical approaches, resource requirements, and cost estimates
@@ -120,6 +134,7 @@ AI-powered candidate matching against job requirements.
 - **Build Tool**: Vite
 - **Styling**: CSS Modules
 - **API Client**: GraphQL Request + Axios
+- **Auth**: JWT stored in localStorage, injected via `requestMiddleware`
 
 ## Project Structure
 
@@ -127,24 +142,57 @@ AI-powered candidate matching against job requirements.
 resume-analyzer/
 ├── src/main/
 │   ├── java/io/subbu/ai/firedrill/
-│   │   ├── entities/          # JPA entities
+│   │   ├── config/            # Security, JWT, Spring config
+│   │   ├── controller/        # REST controllers (file upload, auth)
+│   │   ├── controllers/       # Additional REST controllers
+│   │   ├── entities/          # JPA entities (User, Employee, Candidate…)
+│   │   ├── models/            # DTOs, enums, statistics records
 │   │   ├── repos/             # Spring Data repositories
-│   │   ├── services/          # Business logic
+│   │   ├── repositories/      # Additional repositories
 │   │   ├── resolver/          # GraphQL resolvers
-│   │   └── controller/        # REST controllers
+│   │   └── services/          # Business logic
 │   ├── resources/
 │   │   ├── application.yml    # Spring configuration
+│   │   ├── db/                # Flyway migration scripts
 │   │   └── graphql/
 │   │       └── schema.graphqls
 │   └── frontend/
 │       ├── src/
-│       │   ├── components/    # Reusable React components
-│       │   ├── pages/         # Page components
-│       │   ├── store/         # Redux store & slices
-│       │   └── services/      # API & GraphQL clients
+│       │   ├── components/    # Reusable React components (Layout, ProtectedRoute…)
+│       │   ├── pages/         # Page components (Login, Dashboard, Candidates…)
+│       │   ├── store/         # Redux store, slices, sagas, selectors
+│       │   ├── services/      # GraphQL & REST API clients
+│       │   ├── types/         # Shared TypeScript types
+│       │   └── utils/         # Helpers and utilities
+│       ├── tests/e2e/         # Playwright E2E tests
 │       └── package.json
+├── docker/                    # Docker Compose + Dockerfile + nginx config
+├── docs/                      # Architecture, API and deployment docs
+├── test-data/                 # Sample resumes, job requirements, users JSON
 └── pom.xml
 ```
+
+## Authentication & RBAC
+
+The application uses JWT-based authentication with Spring Security. Four roles are supported:
+
+| Role | Access |
+|------|--------|
+| `ADMIN` | Full access — users, employees, system health, all CRUD |
+| `RECRUITER` | Jobs (CRUD) + Candidates + Upload + Matching |
+| `HR` | Employees + Candidates (read) + Matching |
+| `HIRING_MANAGER` | Jobs (read-only) + Candidates + Matching |
+
+### Default Test Users (seeded on first run)
+
+| Username | Password | Role |
+|----------|----------|------|
+| `admin` | `Admin@123` | ADMIN |
+| `recruiter` | `Recruiter@123` | RECRUITER |
+| `hr` | `HR@123` | HR |
+| `hiring_manager` | `Manager@123` | HIRING_MANAGER |
+
+
 
 ## Testing
 

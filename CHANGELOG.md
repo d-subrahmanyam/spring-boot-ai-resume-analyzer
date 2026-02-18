@@ -1,5 +1,102 @@
 # Resume Analyzer - Change Summary
 
+## ✅ Phase 3: RBAC, Authentication & Bug Fixes (February 18, 2026)
+
+**Status**: ✅ Complete  
+**Scope**: Role-Based Access Control, JWT authentication, GraphQL field fixes, test data organization
+
+### Phase 3.1: JWT Authentication & Spring Security
+
+**New files:**
+- `config/SecurityConfig.java` — Spring Security filter chain with JWT
+- `config/JwtAuthenticationFilter.java` — JWT request filter
+- `config/JwtTokenProvider.java` — Token generation and validation
+- `config/SecurityUtils.java` — Helper for current user extraction
+- `config/UserDetailsServiceImpl.java` — Loads user from DB for auth
+- `controller/AuthController.java` — `/api/auth/login`, `/api/auth/refresh`, `/api/auth/logout`
+
+**New entities:** `User`, `Employee`, `Feedback`, `AuditLog`, `SystemHealth`, `JobQueue`
+
+**New services:** `AuthenticationService`, `UserService`, `EmployeeService`, `FeedbackService`, `SystemHealthService`, `JobQueueService`, `JobSchedulerService`
+
+**New GraphQL resolvers:** `UserResolver`, `EmployeeResolver`, `FeedbackResolver`, `SystemHealthResolver`
+
+**New DTO records:** `UserStatistics`, `EmployeeStatistics`, `DepartmentCount`, `EmploymentTypeCount`, `FeedbackStatistics`, `FeedbackTypeCount`
+
+### Phase 3.2: Frontend RBAC Implementation
+
+**New pages:** Login, AdminDashboard, UserManagement, EmployeeManagement, Unauthorized
+
+**New components:** `ProtectedRoute`, `RoleBasedRoute`, `FeedbackForm`, `FeedbackList`
+
+**New store additions:**
+- `authSlice.ts` — Login/logout state, user info, role
+- `authSagas.ts` — Async login/logout flow
+- `store/selectors/` — `authSelectors.ts` with `selectCanManageJobs`, `selectIsAdmin`, etc.
+
+**GraphQL client fix:** Added `requestMiddleware` to `graphql.ts` to inject `Authorization: Bearer <token>` on every request.
+
+**Role permissions matrix:**
+
+| Role | Jobs | Candidates | Upload | Employees | Users | Admin Dashboard |
+|------|------|------------|--------|-----------|-------|-----------------|
+| ADMIN | CRUD | CRUD | ✅ | CRUD | CRUD | ✅ |
+| RECRUITER | CRUD | CRUD | ✅ | — | — | — |
+| HR | Read | Read | — | CRUD | — | — |
+| HIRING_MANAGER | Read | Read | — | — | — | — |
+
+### Phase 3.3: Bug Fix — GraphQL Candidate Field Mismatch
+
+**Problem:** Frontend queries requested fields that don't exist in the GraphQL schema (`experience`, `education`, `currentCompany`, `summary`), causing `FieldUndefined` server errors on the Candidates page.
+
+**Root cause:** TypeScript `Candidate` interface and all 3 candidate queries used legacy field names that were never aligned with the actual `schema.graphqls` definition.
+
+**Fix:** Updated field names in 3 places:
+
+| File | Old Fields | New Fields |
+|------|-----------|-----------|
+| `graphql.ts` (3 queries) | `experience`, `education`, `currentCompany`, `summary` | `yearsOfExperience`, `academicBackground`, `experienceSummary` |
+| `candidatesSlice.ts` | interface with old names | interface with correct names, removed `currentCompany` |
+| `CandidateList.tsx` | old field display references | updated display, removed `currentCompany` block |
+
+### Phase 3.4: Test Data Organization
+
+Moved all sample resume files from the project root into `test-data/`:
+- `test-resume.txt` → `test-data/`
+- `mock-resume-sarah-chen.pdf` / `.txt` → `test-data/`
+- `sarah-chen-resume.pdf` → `test-data/`
+- `test-scheduler-resume.pdf` → `test-data/`
+
+`test-data/` now contains:
+```
+test-data/
+├── resume-alex-kumar.txt
+├── resume-jane-smith.txt
+├── resume-john-doe.txt
+├── mock-resume-sarah-chen.pdf
+├── mock-resume-sarah-chen.txt
+├── sarah-chen-resume.pdf
+├── test-resume.txt
+├── test-scheduler-resume.pdf
+├── sample-job-requirements.json
+└── sample-users.json
+```
+
+### Phase 3.5: RBAC Validation (All 4 Roles)
+
+End-to-end browser validation with 15+ screenshots saved to `docs/images/`:
+
+| Role | Validation Result |
+|------|------------------|
+| Admin | ✅ All 9 pages accessible, full CRUD, system health visible |
+| Recruiter | ✅ 5 pages, blocked from `/admin` and `/users` (Access Denied shown) |
+| HR | ✅ 4 pages, blocked from `/upload` |
+| Hiring Manager | ✅ 3 pages, Jobs page read-only (Edit/Delete/Create hidden) |
+| Unauthenticated | ✅ Redirected to `/login` |
+| Wrong credentials | ✅ Error message shown on login page |
+
+---
+
 ## ✅ Phase 2: Comprehensive Testing Implementation (February 17, 2026)
 
 **Status**: ✅ Complete  
