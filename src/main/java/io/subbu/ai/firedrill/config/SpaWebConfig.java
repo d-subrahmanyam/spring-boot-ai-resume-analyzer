@@ -11,11 +11,14 @@ import org.springframework.web.bind.annotation.RequestMapping;
 
 /**
  * Configuration for SPA (Single Page Application) routing.
- * Forwards 404 errors to index.html for client-side routing.
+ * Forwards all non-API, non-static paths to index.html for client-side routing.
  */
 @Configuration
 public class SpaWebConfig {
 
+    /**
+     * Fallback: catch any 404 that wasn't handled by explicit mappings below.
+     */
     @Bean
     public WebServerFactoryCustomizer<ConfigurableServletWebServerFactory> containerCustomizer() {
         return container -> {
@@ -25,6 +28,31 @@ public class SpaWebConfig {
 
     @Controller
     public static class SpaViewController {
+
+        /**
+         * Explicit SPA routes — served directly without generating a 404 first.
+         * These are all the known React Router paths in the frontend.
+         */
+        @RequestMapping(value = {
+            "/",
+            "/login",
+            "/dashboard",
+            "/candidates",
+            "/jobs",
+            "/upload",
+            "/matching",
+            "/skills",
+            "/users",
+            "/employees",
+            "/admin",
+            "/admin/**",
+            "/unauthorized",
+        })
+        public String spa() {
+            return "forward:/index.html";
+        }
+
+        /** Catch-all for any remaining 404 forwards from ErrorPage. */
         @RequestMapping("/notFound")
         public String forward() {
             return "forward:/index.html";

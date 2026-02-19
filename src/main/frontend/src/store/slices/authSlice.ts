@@ -21,10 +21,18 @@ const initialState: AuthState = {
 // Initialize from localStorage if tokens exist
 if (initialState.accessToken) {
   const storedUser = localStorage.getItem('user')
-  if (storedUser) {
-    initialState.user = JSON.parse(storedUser)
-    initialState.isAuthenticated = true
-    initialState.tokenExpiresAt = getTokenExpiration(initialState.accessToken)
+  if (storedUser && storedUser !== 'undefined' && storedUser !== 'null') {
+    try {
+      initialState.user = JSON.parse(storedUser)
+      initialState.isAuthenticated = true
+      initialState.tokenExpiresAt = getTokenExpiration(initialState.accessToken)
+    } catch {
+      // Corrupt data in localStorage — clear it
+      localStorage.removeItem('user')
+    }
+  } else if (storedUser === 'undefined' || storedUser === 'null') {
+    // Clean up invalid value written when user payload was undefined
+    localStorage.removeItem('user')
   }
 }
 
@@ -49,7 +57,9 @@ const authSlice = createSlice({
       // Persist to localStorage
       localStorage.setItem('accessToken', action.payload.accessToken)
       localStorage.setItem('refreshToken', action.payload.refreshToken)
-      localStorage.setItem('user', JSON.stringify(action.payload.user))
+      if (action.payload.user) {
+        localStorage.setItem('user', JSON.stringify(action.payload.user))
+      }
     },
     loginFailure: (state, action: PayloadAction<string>) => {
       state.isLoading = false
@@ -78,7 +88,9 @@ const authSlice = createSlice({
       // Persist to localStorage
       localStorage.setItem('accessToken', action.payload.accessToken)
       localStorage.setItem('refreshToken', action.payload.refreshToken)
-      localStorage.setItem('user', JSON.stringify(action.payload.user))
+      if (action.payload.user) {
+        localStorage.setItem('user', JSON.stringify(action.payload.user))
+      }
     },
     registerFailure: (state, action: PayloadAction<string>) => {
       state.isLoading = false
@@ -99,7 +111,9 @@ const authSlice = createSlice({
       // Update localStorage
       localStorage.setItem('accessToken', action.payload.accessToken)
       localStorage.setItem('refreshToken', action.payload.refreshToken)
-      localStorage.setItem('user', JSON.stringify(action.payload.user))
+      if (action.payload.user) {
+        localStorage.setItem('user', JSON.stringify(action.payload.user))
+      }
     },
     refreshTokenFailure: (state, action: PayloadAction<string>) => {
       state.isAuthenticated = false
