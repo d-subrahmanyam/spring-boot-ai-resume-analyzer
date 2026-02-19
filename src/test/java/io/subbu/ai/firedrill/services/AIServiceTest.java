@@ -6,28 +6,19 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
-import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.client.ChatClient.CallResponseSpec;
-import org.springframework.ai.chat.client.ChatClient.PromptUserSpec;
-import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.*;
 
 /**
  * Unit tests for AIService.
- * Tests resume analysis and candidate matching with mocked LLM responses.
+ * AIService uses RestTemplate directly (new RestTemplate()) for HTTP calls to LLM Studio.
+ * When LLM is unavailable, methods return graceful fallback responses — they do not throw.
  */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("AIService Unit Tests")
 class AIServiceTest {
-
-    @Mock
-    private ChatModel chatModel;
 
     @InjectMocks
     private AIService aiService;
@@ -38,6 +29,10 @@ class AIServiceTest {
 
     @BeforeEach
     void setUp() {
+        // Point to a non-existent host so HTTP calls fail fast (no real LLM needed)
+        ReflectionTestUtils.setField(aiService, "llmBaseUrl", "http://localhost:9999/v1");
+        ReflectionTestUtils.setField(aiService, "chatModel", "test-model");
+
         sampleResumeContent = """
             John Doe
             john.doe@email.com | (555) 123-4567
@@ -76,17 +71,38 @@ class AIServiceTest {
     }
 
     @Test
-    @DisplayName("Should handle ChatModel exceptions gracefully")
-    void shouldHandleChatModelExceptions() {
-        // Given
-        when(chatModel.call((org.springframework.ai.chat.prompt.Prompt) any()))
-                .thenThrow(new RuntimeException("LLM service unavailable"));
+    @DisplayName("Should return fallback response when LLM is unavailable")
+    void shouldHandleLlmUnavailableGracefully() {
+        // AIService catches all HTTP/IO exceptions and returns a default response.
+        // When the LLM endpoint is unreachable, analyzeResume should NOT throw —
+        // it should return a non-null fallback ResumeAnalysisResponse.
+        ResumeAnalysisResponse result = aiService.analyzeResume(resumeAnalysisRequest);
 
-        // When/Then
-        org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class, () -> {
-            aiService.analyzeResume(resumeAnalysisRequest);
-        });
+        assertThat(result).isNotNull();
+        assertThat(result.getExperienceSummary()).isNotNull();
+    }
 
-        verify(chatModel, times(1)).call((org.springframework.ai.chat.prompt.Prompt) any());
+    @Test
+    @DisplayName("Should return fallback match response when LLM is unavailable")
+    void shouldHandleLlmUnavailableForMatchingGracefully() {
+        // When LLM is unreachable, matchCandidate should NOT throw —
+        // it should return a non-null fallback CandidateMatchResponse.
+        CandidateMatchResponse result = aiService.matchCandidate(candidateMatchRequest);
+
+        assertThat(result).isNotNull();
+        assertThat(result.getRecommendation()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("Should not throw when resume content is empty")
+    void shouldHandleEmptyResumeContent() {
+        ResumeAnalysisRequest emptyRequest = ResumeAnalysisRequest.builder()
+                .filename("empty.pdf")
+                .resumeContent("")
+                .build();
+
+        // Service should handle empty content without throwing
+        ResumeAnalysisResponse result = aiService.analyzeResume(emptyRequest);
+        assertThat(result).isNotNull();
     }
 }

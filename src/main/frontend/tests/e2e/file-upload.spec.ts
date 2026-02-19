@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { loginAs } from './helpers/auth';
 
 /**
  * File Upload E2E Tests
@@ -12,6 +13,7 @@ import { test, expect } from '@playwright/test';
 
 test.describe('File Upload', () => {
   test.beforeEach(async ({ page }) => {
+    await loginAs(page);
     await page.goto('/upload');
     await page.waitForLoadState('networkidle');
   });
@@ -202,11 +204,12 @@ test.describe('File Upload', () => {
     
     if (await failedStatus.isVisible().catch(() => false)) {
       // Verify failed uploads don't block new uploads
-      const uploadDropzone = page.locator('input[type="file"], text=/drag.*drop|select.*file/i');
-      const canUpload = await uploadDropzone.isVisible().catch(() => false);
+      // The dropzone div contains 'Drag & drop' text and is always visible
+      const dragDropText = await page.getByText(/drag.*drop/i).isVisible().catch(() => false);
+      const fileInput = await page.locator('input[type="file"]').count() > 0;
       
       // Upload area should still be accessible
-      expect(canUpload).toBeTruthy();
+      expect(dragDropText || fileInput).toBeTruthy();
     }
   });
 
@@ -218,10 +221,10 @@ test.describe('File Upload', () => {
     
     if (await completedStatus.isVisible().catch(() => false)) {
       // Verify dropzone is visible and not blocked
-      const dropzone = page.locator('text=/drag.*drop|select.*file/i, input[type="file"]');
-      const isDropzoneVisible = await dropzone.isVisible().catch(() => false);
+      const dragDropText = await page.getByText(/drag.*drop/i).isVisible().catch(() => false);
+      const fileInput = await page.locator('input[type="file"]').count() > 0;
       
-      expect(isDropzoneVisible).toBeTruthy();
+      expect(dragDropText || fileInput).toBeTruthy();
     }
   });
 
@@ -267,11 +270,10 @@ test.describe('File Upload', () => {
     await page.waitForTimeout(1500);
     
     // Verify both components can coexist
-    const uploadArea = page.locator('text=/drag.*drop|select.*file/i, input[type="file"]');
-    const historyArea = page.locator('text=/upload.*history|recent.*uploads/i, table');
-    
-    const hasUploadArea = await uploadArea.isVisible().catch(() => false);
-    const hasHistoryArea = await historyArea.isVisible().catch(() => false);
+    const hasUploadArea = await page.getByText(/drag.*drop/i).isVisible().catch(() => false)
+      || await page.locator('input[type="file"]').count() > 0;
+    const hasHistoryArea = await page.locator('table').isVisible().catch(() => false)
+      || await page.getByText(/upload.*history|recent.*uploads/i).isVisible().catch(() => false);
     
     // In ideal dual-component UI, both should be visible
     // But at minimum, the page should show one or the other

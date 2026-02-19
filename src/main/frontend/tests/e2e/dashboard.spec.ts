@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { loginAs } from './helpers/auth';
 
 /**
  * Dashboard E2E Tests
@@ -7,7 +8,9 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Dashboard', () => {
   test.beforeEach(async ({ page }) => {
+    await loginAs(page);
     await page.goto('/');
+    await page.waitForLoadState('networkidle');
   });
 
   test('should load dashboard successfully', async ({ page }) => {
@@ -22,7 +25,7 @@ test.describe('Dashboard', () => {
     // Verify all navigation links are present
     const nav = page.locator('nav');
     
-    await expect(nav.getByRole('link', { name: /dashboard/i })).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'Dashboard', exact: true })).toBeVisible();
     await expect(nav.getByRole('link', { name: /upload/i })).toBeVisible();
     await expect(nav.getByRole('link', { name: /candidates/i })).toBeVisible();
     await expect(nav.getByRole('link', { name: /job requirements/i })).toBeVisible();
@@ -48,7 +51,7 @@ test.describe('Dashboard', () => {
     await expect(page).toHaveURL(/.*\/skills/);
     
     // Navigate back to Dashboard
-    await page.getByRole('link', { name: /dashboard/i }).click();
+    await page.getByRole('link', { name: 'Dashboard', exact: true }).click();
     await expect(page).toHaveURL('/');
   });
 

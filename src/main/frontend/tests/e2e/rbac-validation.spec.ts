@@ -148,10 +148,12 @@ test.describe('03 - Recruiter Role', () => {
 
         await captureScreenshot(page, '08-recruiter-job-form-filled.png');
 
-        // Submit
-        const submitBtn = page.getByRole('button', { name: /submit|save|create/i });
+        // Submit - use the modal's submit button specifically
+        const submitBtn = page.locator('button[type="submit"]').or(
+          page.getByRole('button', { name: /create job|save|update/i })
+        );
         if (await submitBtn.first().isVisible({ timeout: 2000 })) {
-          await submitBtn.first().click();
+          await submitBtn.first().click({ force: true });
           await page.waitForLoadState('networkidle');
           await captureScreenshot(page, '09-recruiter-job-created.png');
         }

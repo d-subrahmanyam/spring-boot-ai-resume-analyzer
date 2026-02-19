@@ -99,9 +99,10 @@ class EmbeddingServiceTest {
             }
             return new EmbeddingResponse(embeddingResults);
         });
-        
-        when(embeddingRepository.save(any(ResumeEmbedding.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        // EmbeddingService uses insertEmbeddingNative (void) instead of save()
+        doNothing().when(embeddingRepository).insertEmbeddingNative(
+                any(), any(), any(), any(), any());
 
         // When
         List<ResumeEmbedding> results = embeddingService.generateAndStoreEmbeddings(
@@ -111,7 +112,8 @@ class EmbeddingServiceTest {
         assertThat(results).isNotEmpty();
         verify(embeddingRepository).deleteByCandidate(mockCandidate);
         verify(embeddingModel, atLeastOnce()).embedForResponse(anyList());
-        verify(embeddingRepository, atLeast(3)).save(any(ResumeEmbedding.class));
+        verify(embeddingRepository, atLeast(3)).insertEmbeddingNative(
+                any(), any(), any(), any(), any());
     }
 
     @Test
@@ -127,8 +129,8 @@ class EmbeddingServiceTest {
             return new EmbeddingResponse(embeddingResults);
         });
 
-        when(embeddingRepository.save(any(ResumeEmbedding.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+        doNothing().when(embeddingRepository).insertEmbeddingNative(
+                any(), any(), any(), any(), any());
 
         // When
         embeddingService.generateAndStoreEmbeddings(mockCandidate, sampleResumeContent);
@@ -166,19 +168,19 @@ class EmbeddingServiceTest {
         EmbeddingResponse mockResponse = new EmbeddingResponse(embeddingResults);
 
         when(embeddingModel.embedForResponse(anyList())).thenReturn(mockResponse);
-        when(embeddingRepository.save(any(ResumeEmbedding.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+        doNothing().when(embeddingRepository).insertEmbeddingNative(
+                any(), any(), any(), any(), any());
 
         // When
         List<ResumeEmbedding> results = embeddingService.generateAndStoreEmbeddings(
                 mockCandidate, resumeWithSections);
 
         // Then
-        ArgumentCaptor<ResumeEmbedding> captor = ArgumentCaptor.forClass(ResumeEmbedding.class);
-        verify(embeddingRepository, atLeast(5)).save(captor.capture());
+        verify(embeddingRepository, atLeast(5)).insertEmbeddingNative(
+                any(), any(), any(), any(), any());
 
-        List<ResumeEmbedding> savedEmbeddings = captor.getAllValues();
-        assertThat(savedEmbeddings).extracting(ResumeEmbedding::getSectionType)
+        // Verify section types in the returned list
+        assertThat(results).extracting(ResumeEmbedding::getSectionType)
                 .contains("education", "experience", "skills");
     }
 
@@ -201,9 +203,9 @@ class EmbeddingServiceTest {
             }
             return new EmbeddingResponse(embeddingResults);
         });
-        
-        when(embeddingRepository.save(any(ResumeEmbedding.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        doNothing().when(embeddingRepository).insertEmbeddingNative(
+                any(), any(), any(), any(), any());
 
         // When
         List<ResumeEmbedding> results = embeddingService.generateAndStoreEmbeddings(
@@ -233,8 +235,8 @@ class EmbeddingServiceTest {
         EmbeddingResponse mockResponse = new EmbeddingResponse(batchResults);
 
         when(embeddingModel.embedForResponse(anyList())).thenReturn(mockResponse);
-        when(embeddingRepository.save(any(ResumeEmbedding.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+        doNothing().when(embeddingRepository).insertEmbeddingNative(
+                any(), any(), any(), any(), any());
 
         // When
         embeddingService.generateAndStoreEmbeddings(mockCandidate, longResume.toString());
@@ -311,18 +313,20 @@ class EmbeddingServiceTest {
         );
 
         when(embeddingModel.embedForResponse(anyList())).thenReturn(mockResponse);
-        when(embeddingRepository.save(any(ResumeEmbedding.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+        doNothing().when(embeddingRepository).insertEmbeddingNative(
+                any(), any(), any(), any(), any());
 
         // When
-        embeddingService.generateAndStoreEmbeddings(mockCandidate, "Test content");
+        List<ResumeEmbedding> results = embeddingService.generateAndStoreEmbeddings(
+                mockCandidate, "Test content");
 
-        // Then
-        ArgumentCaptor<ResumeEmbedding> captor = ArgumentCaptor.forClass(ResumeEmbedding.class);
-        verify(embeddingRepository, atLeastOnce()).save(captor.capture());
+        // Then - verify candidateId is passed to insertEmbeddingNative
+        ArgumentCaptor<String> candidateIdCaptor = ArgumentCaptor.forClass(String.class);
+        verify(embeddingRepository, atLeastOnce()).insertEmbeddingNative(
+                any(), candidateIdCaptor.capture(), any(), any(), any());
 
-        ResumeEmbedding savedEmbedding = captor.getValue();
-        assertThat(savedEmbedding.getCandidate()).isEqualTo(mockCandidate);
+        assertThat(candidateIdCaptor.getValue())
+                .isEqualTo(mockCandidate.getId().toString());
     }
 
     /**

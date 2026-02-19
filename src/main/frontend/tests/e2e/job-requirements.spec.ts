@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { loginAs } from './helpers/auth';
 
 /**
  * Job Requirements E2E Tests
@@ -12,6 +13,7 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Job Requirements', () => {
   test.beforeEach(async ({ page }) => {
+    await loginAs(page);
     await page.goto('/jobs');
     await page.waitForLoadState('networkidle');
   });
@@ -33,11 +35,11 @@ test.describe('Job Requirements', () => {
     await expect(page.getByRole('heading', { name: /create job requirement/i })).toBeVisible();
     
     // Verify all form fields are present
-    await expect(page.getByPlaceholder(/job title/i)).toBeVisible();
-    await expect(page.getByPlaceholder(/search.*skills/i)).toBeVisible();
-    await expect(page.getByPlaceholder(/education/i)).toBeVisible();
-    await expect(page.getByPlaceholder(/domain/i)).toBeVisible();
-    await expect(page.getByPlaceholder(/description/i)).toBeVisible();
+    await expect(page.locator('input[name="title"], #job-title').first()).toBeVisible();
+    await expect(page.getByPlaceholder(/search.*skills|type.*skills/i)).toBeVisible();
+    await expect(page.locator('#required-education, input[name="requiredEducation"]').first()).toBeVisible();
+    await expect(page.locator('#domain, input[name="domainRequirements"]').first()).toBeVisible();
+    await expect(page.locator('#description, textarea[name="description"]').first()).toBeVisible();
   });
 
   test('should display experience range slider', async ({ page }) => {
@@ -57,7 +59,7 @@ test.describe('Job Requirements', () => {
     expect(sliderCount).toBeGreaterThanOrEqual(1);
     
     // Verify years display (e.g., "0 years - 10 years")
-    await expect(page.getByText(/\d+\s*years/i)).toBeVisible();
+    await expect(page.getByText(/\d+\s*years/i).first()).toBeVisible();
   });
 
   test('should test skills autocomplete functionality', async ({ page }) => {
@@ -79,7 +81,7 @@ test.describe('Job Requirements', () => {
     
     if (suggestionCount > 0) {
       // Verify Java and JavaScript appear
-      await expect(page.getByText('Java', { exact: false })).toBeVisible();
+      await expect(page.getByText('Java', { exact: false }).first()).toBeVisible();
       
       // Click on a suggestion
       await suggestions.first().click();
@@ -121,7 +123,7 @@ test.describe('Job Requirements', () => {
     
     if (await slider.isVisible()) {
       // Get initial value display
-      const initialText = await page.locator('text=/\d+\s*years/i').first().textContent();
+      const initialText = await page.getByText(/\d+\s*years/i).first().textContent().catch(() => null);
       
       // Adjust slider by clicking and dragging
       const sliderBox = await slider.boundingBox();
@@ -131,7 +133,7 @@ test.describe('Job Requirements', () => {
         await page.waitForTimeout(300);
         
         // Verify value changed
-        const newText = await page.locator('text=/\d+\s*years/i').first().textContent();
+        const newText = await page.getByText(/\d+\s*years/i).first().textContent().catch(() => null);
         // Values should be different or remain valid
         expect(newText).toBeTruthy();
       }
@@ -159,7 +161,7 @@ test.describe('Job Requirements', () => {
     
     // Fill in job title
     const timestamp = Date.now();
-    await page.getByPlaceholder(/job title/i).fill(`Senior Developer ${timestamp}`);
+    await page.locator('input[name="title"], #job-title').first().fill(`Senior Developer ${timestamp}`);
     
     // Add skills if autocomplete works
     const skillsInput = page.getByPlaceholder(/search.*skills|type.*skills/i);
@@ -173,9 +175,9 @@ test.describe('Job Requirements', () => {
     }
     
     // Fill other fields
-    await page.getByPlaceholder(/education/i).fill("Bachelor's in Computer Science");
-    await page.getByPlaceholder(/domain/i).fill('Software Development');
-    await page.getByPlaceholder(/description/i).fill('Looking for an experienced Java developer');
+    await page.locator('#required-education, input[name="requiredEducation"]').first().fill("Bachelor's in Computer Science");
+    await page.locator('#domain, input[name="domainRequirements"]').first().fill('Software Development');
+    await page.locator('#description, textarea[name="description"]').first().fill('Looking for an experienced Java developer');
     
     // Submit form
     await page.getByRole('button', { name: /create job/i }).click();
