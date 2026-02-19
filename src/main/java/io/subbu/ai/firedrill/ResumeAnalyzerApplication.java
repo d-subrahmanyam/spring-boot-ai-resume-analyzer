@@ -3,6 +3,7 @@ package io.subbu.ai.firedrill;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.scheduling.annotation.EnableAsync;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * Main application class for Resume Analyzer.
@@ -13,9 +14,11 @@ import org.springframework.scheduling.annotation.EnableAsync;
  * - Candidate matching against job requirements
  * - Batch processing of resume uploads
  * - Real-time status tracking via GraphQL API
+ * - System health monitoring with scheduled checks
  */
 @SpringBootApplication
 @EnableAsync
+@EnableScheduling
 public class ResumeAnalyzerApplication {
 
     /**

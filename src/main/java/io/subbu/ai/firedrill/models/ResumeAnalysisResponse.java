@@ -1,5 +1,6 @@
 package io.subbu.ai.firedrill.models;
 
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -38,16 +39,19 @@ public class ResumeAnalysisResponse {
     /**
      * Identified skills (comma-separated)
      */
+    @JsonDeserialize(using = ArrayOrStringDeserializer.class)
     private String skills;
 
     /**
      * Domain knowledge summary
      */
+    @JsonDeserialize(using = ArrayOrStringDeserializer.class)
     private String domainKnowledge;
 
     /**
      * Academic background summary
      */
+    @JsonDeserialize(using = ArrayOrStringDeserializer.class)
     private String academicBackground;
 
     /**

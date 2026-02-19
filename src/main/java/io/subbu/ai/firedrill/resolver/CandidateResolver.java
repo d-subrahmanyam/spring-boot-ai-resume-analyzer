@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.graphql.data.method.annotation.Argument;
 import org.springframework.graphql.data.method.annotation.MutationMapping;
 import org.springframework.graphql.data.method.annotation.QueryMapping;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Controller;
 
 import java.util.List;
@@ -23,6 +24,7 @@ public class CandidateResolver {
     private final CandidateRepository candidateRepository;
 
     @QueryMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER', 'HIRING_MANAGER', 'HR')")
     public Candidate candidate(@Argument UUID id) {
         log.info("Fetching candidate: {}", id);
         return candidateRepository.findById(id)
@@ -30,24 +32,28 @@ public class CandidateResolver {
     }
 
     @QueryMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER', 'HIRING_MANAGER', 'HR')")
     public List<Candidate> allCandidates() {
         log.info("Fetching all candidates");
         return candidateRepository.findAll();
     }
 
     @QueryMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER', 'HIRING_MANAGER', 'HR')")
     public List<Candidate> searchCandidatesByName(@Argument String name) {
         log.info("Searching candidates by name: {}", name);
         return candidateRepository.searchByName(name);
     }
 
     @QueryMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER', 'HIRING_MANAGER', 'HR')")
     public List<Candidate> searchCandidatesBySkill(@Argument String skill) {
         log.info("Searching candidates by skill: {}", skill);
         return candidateRepository.findBySkillsContaining(skill);
     }
 
     @MutationMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER')")
     public Candidate updateCandidate(
             @Argument UUID id,
             @Argument String name,
@@ -74,6 +80,7 @@ public class CandidateResolver {
     }
 
     @MutationMapping
+    @PreAuthorize("hasRole('ADMIN')")
     public Boolean deleteCandidate(@Argument UUID id) {
         log.info("Deleting candidate: {}", id);
         candidateRepository.deleteById(id);

@@ -9,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.graphql.data.method.annotation.Argument;
 import org.springframework.graphql.data.method.annotation.MutationMapping;
 import org.springframework.graphql.data.method.annotation.QueryMapping;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Controller;
 
 import java.util.HashSet;
@@ -28,6 +29,7 @@ public class JobRequirementResolver {
     private final SkillRepository skillRepository;
 
     @QueryMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER', 'HIRING_MANAGER')")
     public JobRequirement jobRequirement(@Argument UUID id) {
         log.info("Fetching job requirement: {}", id);
         return jobRepository.findById(id)
@@ -35,18 +37,21 @@ public class JobRequirementResolver {
     }
 
     @QueryMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER', 'HIRING_MANAGER')")
     public List<JobRequirement> allJobRequirements() {
         log.info("Fetching all job requirements");
         return jobRepository.findAll();
     }
 
     @QueryMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER', 'HIRING_MANAGER')")
     public List<JobRequirement> activeJobRequirements() {
         log.info("Fetching active job requirements");
         return jobRepository.findByIsActive(true);
     }
 
     @MutationMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER')")
     public JobRequirement createJobRequirement(
             @Argument String title,
             @Argument String requiredSkills,
@@ -77,6 +82,15 @@ public class JobRequirementResolver {
         if (skillIds != null && !skillIds.isEmpty()) {
             Set<Skill> skills = new HashSet<>(skillRepository.findAllById(skillIds));
             job.setSkills(skills);
+            // If requiredSkills text is empty, derive it from the selected skill names
+            // so the AI matching engine has proper text criteria to work with
+            if (job.getRequiredSkills() == null || job.getRequiredSkills().isBlank()) {
+                String derivedSkills = skills.stream()
+                        .map(Skill::getName)
+                        .sorted()
+                        .collect(java.util.stream.Collectors.joining(", "));
+                job.setRequiredSkills(derivedSkills);
+            }
         }
 
         return jobRepository.save(job);
@@ -121,6 +135,14 @@ public class JobRequirementResolver {
         if (skillIds != null) {
             Set<Skill> skills = new HashSet<>(skillRepository.findAllById(skillIds));
             job.setSkills(skills);
+            // Re-derive requiredSkills text from badge skills when they change
+            if (!skills.isEmpty() && (job.getRequiredSkills() == null || job.getRequiredSkills().isBlank())) {
+                String derivedSkills = skills.stream()
+                        .map(Skill::getName)
+                        .sorted()
+                        .collect(java.util.stream.Collectors.joining(", "));
+                job.setRequiredSkills(derivedSkills);
+            }
         }
 
         return jobRepository.save(job);

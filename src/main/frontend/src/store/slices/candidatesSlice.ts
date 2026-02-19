@@ -6,10 +6,9 @@ export interface Candidate {
   email: string
   mobile?: string
   skills: string
-  experience?: number
-  education?: string
-  currentCompany?: string
-  summary?: string
+  yearsOfExperience?: number
+  academicBackground?: string
+  experienceSummary?: string
   createdAt: string
 }
 

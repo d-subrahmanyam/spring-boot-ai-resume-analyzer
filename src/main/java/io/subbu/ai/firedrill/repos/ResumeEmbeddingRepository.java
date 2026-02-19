@@ -91,4 +91,25 @@ public interface ResumeEmbeddingRepository extends JpaRepository<ResumeEmbedding
      */
     @Query("DELETE FROM ResumeEmbedding re WHERE re.candidate.id = :candidateId")
     void deleteByCandidateId(@Param("candidateId") UUID candidateId);
+
+    /**
+     * Native SQL insert to properly handle pgvector type casting.
+     * JPA cannot automatically cast String to vector type, so we use native SQL with explicit CAST.
+     *
+     * @param id UUID for the embedding
+     * @param candidateId Candidate UUID
+     * @param contentChunk The text chunk
+     * @param embedding The vector as string (e.g., "[0.1, 0.2, ...]")
+     * @param sectionType The section type
+     */
+    @jakarta.transaction.Transactional
+    @org.springframework.data.jpa.repository.Modifying
+    @Query(value = "INSERT INTO resume_embeddings (id, candidate_id, content_chunk, embedding, section_type, created_at) " +
+                   "VALUES (CAST(:id AS uuid), CAST(:candidateId AS uuid), :contentChunk, CAST(:embedding AS vector), :sectionType, NOW())",
+           nativeQuery = true)
+    void insertEmbeddingNative(@Param("id") String id,
+                               @Param("candidateId") String candidateId,
+                               @Param("contentChunk") String contentChunk,
+                               @Param("embedding") String embedding,
+                               @Param("sectionType") String sectionType);
 }

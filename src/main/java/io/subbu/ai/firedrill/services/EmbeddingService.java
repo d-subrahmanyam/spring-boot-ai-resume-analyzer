@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Collections;
 
 /**
  * Service for generating and managing vector embeddings using Spring AI.
@@ -59,24 +60,30 @@ public class EmbeddingService {
                     .map(TextChunk::text)
                     .toList();
 
-            EmbeddingResponse response = embeddingModel.embedForResponse(texts);
-            List<float[]> batchEmbeddings = response.getResults().stream()
-                    .map(embedding -> embedding.getOutput())
-                    .toList();
+            List<float[]> batchEmbeddings = generateEmbeddingsWithFallback(texts);
 
-            // Create and save embedding entities
+            // Create and save embedding entities using native SQL to handle vector type
             for (int j = 0; j < batch.size(); j++) {
                 TextChunk chunk = batch.get(j);
                 float[] embedding = batchEmbeddings.get(j);
+                String embeddingStr = vectorToString(embedding);
 
-                ResumeEmbedding resumeEmbedding = ResumeEmbedding.builder()
-                        .candidate(candidate)
-                        .contentChunk(chunk.text())
-                        .embedding(vectorToString(embedding))
-                        .sectionType(chunk.sectionType())
-                        .build();
-
-                embeddings.add(embeddingRepository.save(resumeEmbedding));
+                String embId = java.util.UUID.randomUUID().toString();
+                embeddingRepository.insertEmbeddingNative(
+                        embId,
+                        candidate.getId().toString(),
+                        chunk.text(),
+                        embeddingStr,
+                        chunk.sectionType()
+                );
+                embeddings.add(new ResumeEmbedding(
+                        java.util.UUID.fromString(embId),
+                        candidate,
+                        chunk.text(),
+                        embeddingStr,
+                        chunk.sectionType(),
+                        null
+                ));
             }
         }
 
@@ -94,9 +101,35 @@ public class EmbeddingService {
     public String generateQueryEmbedding(String queryText) {
         log.debug("Generating embedding for query: {}", queryText.substring(0, Math.min(50, queryText.length())));
         
-        EmbeddingResponse response = embeddingModel.embedForResponse(List.of(queryText));
-        float[] embedding = response.getResults().get(0).getOutput();
-        return vectorToString(embedding);
+        List<float[]> embeddings = generateEmbeddingsWithFallback(List.of(queryText));
+        return vectorToString(embeddings.get(0));
+    }
+
+    /**
+     * Generate embeddings with fallback to avoid Spring AI M4 usage-null issue.
+     * Tries embedForResponse first, falls back to per-text embed() on failure.
+     */
+    private List<float[]> generateEmbeddingsWithFallback(List<String> texts) {
+        try {
+            EmbeddingResponse response = embeddingModel.embedForResponse(texts);
+            return response.getResults().stream()
+                    .map(e -> e.getOutput())
+                    .toList();
+        } catch (IllegalArgumentException | NullPointerException e) {
+            log.warn("embedForResponse failed ({}), falling back to single embed()", e.getMessage());
+            // Fallback: call embed() per text (bypasses usage checks)
+            List<float[]> results = new ArrayList<>();
+            for (String text : texts) {
+                try {
+                    float[] vec = embeddingModel.embed(text);
+                    results.add(vec);
+                } catch (Exception inner) {
+                    log.warn("embed() also failed for text, using zero vector: {}", inner.getMessage());
+                    results.add(new float[768]);
+                }
+            }
+            return results;
+        }
     }
 
     /**

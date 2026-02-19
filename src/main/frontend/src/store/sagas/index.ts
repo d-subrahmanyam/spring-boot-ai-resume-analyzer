@@ -1,6 +1,6 @@
 import { all, call, put, takeLatest, takeEvery } from 'redux-saga/effects'
 import { PayloadAction } from '@reduxjs/toolkit'
-import { graphqlClient, 
+import { gqlRequestWithRefresh,
   GET_ALL_CANDIDATES, 
   SEARCH_CANDIDATES_BY_NAME, 
   SEARCH_CANDIDATES_BY_SKILL,
@@ -21,14 +21,23 @@ import * as candidatesActions from '@store/slices/candidatesSlice'
 import * as jobsActions from '@store/slices/jobsSlice'
 import * as matchesActions from '@store/slices/matchesSlice'
 import * as uploadActions from '@store/slices/uploadSlice'
+import { authSagas } from './authSagas'
 import type { Candidate } from '@store/slices/candidatesSlice'
 import type { JobRequirement } from '@store/slices/jobsSlice'
 import type { CandidateMatch } from '@store/slices/matchesSlice'
 import type { ProcessTracker } from '@store/slices/uploadSlice'
 
-// Helper to call graphql client (wrapper to fix TypeScript/redux-saga type issues)
+// Helper to call graphql client with automatic token refresh on UNAUTHORIZED
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const gqlRequest = (query: any, variables?: any) => graphqlClient.request(query, variables)
+const gqlRequest = (query: any, variables?: any) => gqlRequestWithRefresh(query, variables)
+
+// Helper to map raw GraphQL CandidateMatch response (nested objects) to flat interface
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mapMatch = (m: any): CandidateMatch => ({
+  ...m,
+  candidateId: m.candidate?.id ?? m.candidateId ?? '',
+  jobRequirementId: m.jobRequirement?.id ?? m.jobRequirementId ?? '',
+})
 
 // Candidate Sagas
 function* fetchCandidatesSaga() {
@@ -147,9 +156,9 @@ function* fetchMatchesForJobSaga(
     const data: { matchesForJob: CandidateMatch[] } = yield call(
       gqlRequest,
       GET_MATCHES_FOR_JOB,
-      action.payload
+      { jobRequirementId: action.payload.jobId, limit: action.payload.limit }
     )
-    yield put(matchesActions.fetchMatchesSuccess(data.matchesForJob))
+    yield put(matchesActions.fetchMatchesSuccess(data.matchesForJob.map(mapMatch)))
   } catch (error: any) {
     yield put(matchesActions.fetchMatchesFailure(error.message))
   }
@@ -162,9 +171,9 @@ function* matchCandidateToJobSaga(
     const data: { matchCandidateToJob: CandidateMatch } = yield call(
       gqlRequest,
       MATCH_CANDIDATE_TO_JOB,
-      action.payload
+      { candidateId: action.payload.candidateId, jobRequirementId: action.payload.jobId }
     )
-    yield put(matchesActions.matchingSuccess(data.matchCandidateToJob))
+    yield put(matchesActions.matchingSuccess(mapMatch(data.matchCandidateToJob)))
   } catch (error: any) {
     yield put(matchesActions.matchingFailure(error.message))
   }
@@ -175,9 +184,9 @@ function* matchAllCandidatesToJobSaga(action: PayloadAction<string>) {
     const data: { matchAllCandidatesToJob: CandidateMatch[] } = yield call(
       gqlRequest,
       MATCH_ALL_CANDIDATES_TO_JOB,
-      { jobId: action.payload }
+      { jobRequirementId: action.payload }
     )
-    yield put(matchesActions.matchingSuccess(data.matchAllCandidatesToJob))
+    yield put(matchesActions.matchingSuccess(data.matchAllCandidatesToJob.map(mapMatch)))
   } catch (error: any) {
     yield put(matchesActions.matchingFailure(error.message))
   }
@@ -187,12 +196,13 @@ function* updateMatchStatusSaga(
   action: PayloadAction<{ matchId: string; isShortlisted?: boolean; isSelected?: boolean }>
 ) {
   try {
-    const data: { updateMatchStatus: CandidateMatch } = yield call(
+    const { matchId, isShortlisted, isSelected } = action.payload
+    const data: { updateCandidateMatch: CandidateMatch } = yield call(
       gqlRequest,
       UPDATE_MATCH_STATUS,
-      action.payload
+      { matchId, input: { isShortlisted, isSelected } }
     )
-    yield put(matchesActions.updateMatchStatusSuccess(data.updateMatchStatus))
+    yield put(matchesActions.updateMatchStatusSuccess(mapMatch(data.updateCandidateMatch)))
   } catch (error: any) {
     yield put(matchesActions.fetchMatchesFailure(error.message))
   }
@@ -245,6 +255,7 @@ function* fetchRecentTrackersSaga(action: PayloadAction<number>) {
 // Root Saga
 export default function* rootSaga() {
   yield all([
+    authSagas(),
     takeLatest(candidatesActions.fetchCandidates.type, fetchCandidatesSaga),
     takeLatest(candidatesActions.searchCandidatesByName.type, searchCandidatesByNameSaga),
     takeLatest(candidatesActions.searchCandidatesBySkill.type, searchCandidatesBySkillSaga),

@@ -1,5 +1,6 @@
 import { configureStore } from '@reduxjs/toolkit'
 import createSagaMiddleware from 'redux-saga'
+import authReducer from './slices/authSlice'
 import candidatesReducer from './slices/candidatesSlice'
 import jobsReducer from './slices/jobsSlice'
 import matchesReducer from './slices/matchesSlice'
@@ -10,6 +11,7 @@ const sagaMiddleware = createSagaMiddleware()
 
 export const store = configureStore({
   reducer: {
+    auth: authReducer,
     candidates: candidatesReducer,
     jobs: jobsReducer,
     matches: matchesReducer,

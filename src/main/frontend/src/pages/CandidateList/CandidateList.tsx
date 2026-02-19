@@ -7,6 +7,9 @@ import {
   deleteCandidate,
 } from '@/store/slices/candidatesSlice'
 import { RootState } from '@/store'
+import FeedbackList from '@/components/FeedbackList/FeedbackList'
+import FeedbackForm from '@/components/FeedbackForm/FeedbackForm'
+import { EntityType } from '@/components/FeedbackForm/FeedbackForm'
 import styles from './CandidateList.module.css'
 
 const CandidateList = () => {
@@ -14,6 +17,10 @@ const CandidateList = () => {
   const { candidates, loading } = useSelector((state: RootState) => state.candidates)
   const [searchType, setSearchType] = useState<'all' | 'name' | 'skill'>('all')
   const [searchQuery, setSearchQuery] = useState('')
+  const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null)
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false)
+  const [showFeedbackForm, setShowFeedbackForm] = useState(false)
+  const [feedbackRefreshTrigger, setFeedbackRefreshTrigger] = useState(0)
 
   useEffect(() => {
     dispatch(fetchCandidates())
@@ -33,6 +40,23 @@ const CandidateList = () => {
     if (confirm('Are you sure you want to delete this candidate?')) {
       dispatch(deleteCandidate(id))
     }
+  }
+
+  const handleOpenFeedback = (candidateId: string) => {
+    setSelectedCandidateId(candidateId)
+    setShowFeedbackModal(true)
+    setShowFeedbackForm(false)
+  }
+
+  const handleCloseFeedback = () => {
+    setShowFeedbackModal(false)
+    setSelectedCandidateId(null)
+    setShowFeedbackForm(false)
+  }
+
+  const handleFeedbackSuccess = () => {
+    setShowFeedbackForm(false)
+    setFeedbackRefreshTrigger((prev) => prev + 1)
   }
 
   return (
@@ -81,8 +105,8 @@ const CandidateList = () => {
             <div key={candidate.id} className={styles.card}>
               <div className={styles.cardHeader}>
                 <h3>{candidate.name}</h3>
-                {candidate.experience && (
-                  <span className={styles.experience}>{candidate.experience} yrs</span>
+                {candidate.yearsOfExperience && (
+                  <span className={styles.experience}>{candidate.yearsOfExperience} yrs</span>
                 )}
               </div>
               <div className={styles.cardBody}>
@@ -94,14 +118,9 @@ const CandidateList = () => {
                     <strong>Mobile:</strong> {candidate.mobile}
                   </div>
                 )}
-                {candidate.currentCompany && (
+                {candidate.academicBackground && (
                   <div className={styles.info}>
-                    <strong>Company:</strong> {candidate.currentCompany}
-                  </div>
-                )}
-                {candidate.education && (
-                  <div className={styles.info}>
-                    <strong>Education:</strong> {candidate.education}
+                    <strong>Education:</strong> {candidate.academicBackground}
                   </div>
                 )}
                 {candidate.skills && (
@@ -110,14 +129,20 @@ const CandidateList = () => {
                     <p>{candidate.skills}</p>
                   </div>
                 )}
-                {candidate.summary && (
+                {candidate.experienceSummary && (
                   <div className={styles.summary}>
                     <strong>Summary:</strong>
-                    <p>{candidate.summary}</p>
+                    <p>{candidate.experienceSummary}</p>
                   </div>
                 )}
               </div>
               <div className={styles.cardFooter}>
+                <button
+                  className={styles.feedbackButton}
+                  onClick={() => handleOpenFeedback(candidate.id)}
+                >
+                  💬 Feedback
+                </button>
                 <button
                   className={styles.deleteButton}
                   onClick={() => handleDelete(candidate.id)}
@@ -130,6 +155,45 @@ const CandidateList = () => {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Feedback Modal */}
+      {showFeedbackModal && selectedCandidateId && (
+        <div className={styles.modal} onClick={handleCloseFeedback}>
+          <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <h2>Candidate Feedback</h2>
+              <button onClick={handleCloseFeedback} className={styles.closeButton}>
+                ✕
+              </button>
+            </div>
+
+            <div className={styles.modalBody}>
+              {!showFeedbackForm ? (
+                <>
+                  <button
+                    onClick={() => setShowFeedbackForm(true)}
+                    className={styles.addFeedbackButton}
+                  >
+                    + Add Feedback
+                  </button>
+                  <FeedbackList
+                    entityId={selectedCandidateId}
+                    entityType={EntityType.CANDIDATE}
+                    refreshTrigger={feedbackRefreshTrigger}
+                  />
+                </>
+              ) : (
+                <FeedbackForm
+                  entityId={selectedCandidateId}
+                  entityType={EntityType.CANDIDATE}
+                  onSuccess={handleFeedbackSuccess}
+                  onCancel={() => setShowFeedbackForm(false)}
+                />
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -70,6 +70,18 @@ public class ProcessTracker {
     private String uploadedFilename;
 
     /**
+     * Link to job queue for scheduler-based processing
+     */
+    @Column(name = "job_id")
+    private UUID jobId;
+
+    /**
+     * Correlation ID to group related jobs (batch uploads)
+     */
+    @Column(name = "correlation_id")
+    private String correlationId;
+
+    /**
      * Timestamp when the processing started
      */
     @CreationTimestamp

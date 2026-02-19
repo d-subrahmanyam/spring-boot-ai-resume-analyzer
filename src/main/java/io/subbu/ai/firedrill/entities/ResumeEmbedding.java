@@ -1,5 +1,6 @@
 package io.subbu.ai.firedrill.entities;
 
+import com.pgvector.PGvector;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -44,9 +45,8 @@ public class ResumeEmbedding {
     private String contentChunk;
 
     /**
-     * Vector embedding representation stored in PostgreSQL vector format
-     * Dimension is 768 for nomic-embed-text model
-     * Note: Change to 1536 if using OpenAI embeddings instead
+     * Vector embedding stored as pgvector type.
+     * Dimension is 768 for nomic-embed-text model.
      */
     @Column(name = "embedding", columnDefinition = "vector(768)")
     private String embedding;

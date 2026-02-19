@@ -10,14 +10,19 @@ import {
 import type { Skill } from '@/store/slices/jobsSlice'
 import { RootState } from '@/store'
 import type { JobRequirement } from '@/store/slices/jobsSlice'
+import { selectCanManageJobs } from '@/store/selectors/authSelectors'
 import SkillsInput from '@/components/SkillsInput/SkillsInput'
 import RangeSlider from '@/components/RangeSlider/RangeSlider'
+import FeedbackList from '@/components/FeedbackList/FeedbackList'
+import FeedbackForm from '@/components/FeedbackForm/FeedbackForm'
+import { EntityType } from '@/components/FeedbackForm/FeedbackForm'
 import { graphqlClient, SEARCH_SKILLS } from '@/services/graphql'
 import styles from './JobRequirements.module.css'
 
 const JobRequirements = () => {
   const dispatch = useDispatch()
   const { jobs, selectedJob, loading } = useSelector((state: RootState) => state.jobs)
+  const canManageJobs = useSelector(selectCanManageJobs)
   const [showForm, setShowForm] = useState(false)
   const [formData, setFormData] = useState<Partial<JobRequirement>>({
     title: '',
@@ -31,6 +36,10 @@ const JobRequirements = () => {
     isActive: true,
   })
   const [skillSuggestions, setSkillSuggestions] = useState<Skill[]>([])
+  const [selectedJobId, setSelectedJobId] = useState<string | null>(null)
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false)
+  const [showFeedbackForm, setShowFeedbackForm] = useState(false)
+  const [feedbackRefreshTrigger, setFeedbackRefreshTrigger] = useState(0)
 
   useEffect(() => {
     dispatch(fetchJobs())
@@ -103,6 +112,23 @@ const JobRequirements = () => {
     }
   }
 
+  const handleOpenFeedback = (jobId: string) => {
+    setSelectedJobId(jobId)
+    setShowFeedbackModal(true)
+    setShowFeedbackForm(false)
+  }
+
+  const handleCloseFeedback = () => {
+    setShowFeedbackModal(false)
+    setSelectedJobId(null)
+    setShowFeedbackForm(false)
+  }
+
+  const handleFeedbackSuccess = () => {
+    setShowFeedbackForm(false)
+    setFeedbackRefreshTrigger((prev) => prev + 1)
+  }
+
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
@@ -122,9 +148,11 @@ const JobRequirements = () => {
     <div className={styles.jobRequirements}>
       <div className={styles.header}>
         <h2>Job Requirements ({jobs.length})</h2>
-        <button onClick={handleCreateNew} className={styles.createButton}>
-          + Create New Job
-        </button>
+        {canManageJobs && (
+          <button onClick={handleCreateNew} className={styles.createButton}>
+            + Create New Job
+          </button>
+        )}
       </div>
 
       {showForm && (
@@ -276,18 +304,64 @@ const JobRequirements = () => {
                 )}
               </div>
               <div className={styles.cardFooter}>
-                <button className={styles.editButton} onClick={() => handleEdit(job)}>
-                  Edit
+                <button className={styles.feedbackButton} onClick={() => handleOpenFeedback(job.id)}>
+                  💬 Feedback
                 </button>
-                <button className={styles.deleteButton} onClick={() => handleDelete(job.id)}>
-                  Delete
-                </button>
+                {canManageJobs && (
+                  <button className={styles.editButton} onClick={() => handleEdit(job)}>
+                    Edit
+                  </button>
+                )}
+                {canManageJobs && (
+                  <button className={styles.deleteButton} onClick={() => handleDelete(job.id)}>
+                    Delete
+                  </button>
+                )}
                 <span className={styles.date}>
                   {new Date(job.createdAt).toLocaleDateString()}
                 </span>
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Feedback Modal */}
+      {showFeedbackModal && selectedJobId && (
+        <div className={styles.modal} onClick={handleCloseFeedback}>
+          <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <h2>Job Requirement Feedback</h2>
+              <button onClick={handleCloseFeedback} className={styles.closeButton}>
+                ✕
+              </button>
+            </div>
+
+            <div className={styles.modalBody}>
+              {!showFeedbackForm ? (
+                <>
+                  <button
+                    onClick={() => setShowFeedbackForm(true)}
+                    className={styles.addFeedbackButton}
+                  >
+                    + Add Feedback
+                  </button>
+                  <FeedbackList
+                    entityId={selectedJobId}
+                    entityType={EntityType.JOB_REQUIREMENT}
+                    refreshTrigger={feedbackRefreshTrigger}
+                  />
+                </>
+              ) : (
+                <FeedbackForm
+                  entityId={selectedJobId}
+                  entityType={EntityType.JOB_REQUIREMENT}
+                  onSuccess={handleFeedbackSuccess}
+                  onCancel={() => setShowFeedbackForm(false)}
+                />
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>

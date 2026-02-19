@@ -43,10 +43,16 @@ spring:
         options:
           model: ${LLM_STUDIO_MODEL:mistralai/mistral-7b-instruct-v0.3}
           temperature: 0.7
-          max-tokens: 2000
+          max-tokens: 4000
       embedding:
         options:
           model: ${LLM_STUDIO_EMBEDDING_MODEL:text-embedding-nomic-embed-text-v1.5}
+
+# JWT Configuration
+jwt:
+  secret: ${JWT_SECRET:YourSecretKeyMustBeAtLeast256BitsLongForHS256AlgorithmToWorkProperlyPleaseChangeThisInProduction}
+  access-token-expiration-ms: ${JWT_ACCESS_TOKEN_EXPIRATION:900000}  # 15 minutes
+  refresh-token-expiration-ms: ${JWT_REFRESH_TOKEN_EXPIRATION:604800000}  # 7 days
 
 # Application AI Configuration
 ai:
@@ -67,6 +73,23 @@ app:
   processing:
     thread-pool-size: 5
     max-retries: 3
+  
+  # Job Scheduler Configuration
+  # Set scheduler.enabled=true to use queue-based processing
+  # Set scheduler.enabled=false to use legacy async processing
+  scheduler:
+    enabled: ${SCHEDULER_ENABLED:false}  # Feature flag: true=scheduler, false=async
+    poll-interval-ms: ${SCHEDULER_POLL_INTERVAL:5000}  # How often to check for jobs (5 seconds)
+    initial-delay-ms: ${SCHEDULER_INITIAL_DELAY:10000}  # Wait before first poll (10 seconds)
+    batch-size: ${SCHEDULER_BATCH_SIZE:5}  # Max jobs to claim per poll
+    thread-pool-size: ${SCHEDULER_THREAD_POOL:5}  # Worker threads for job processing
+    worker-id: ${SCHEDULER_WORKER_ID:worker-1}  # Unique ID for this worker instance
+    stale-job-threshold-minutes: ${SCHEDULER_STALE_THRESHOLD:15}  # Jobs without heartbeat for 15 min = stale
+    stale-check-interval-ms: ${SCHEDULER_STALE_CHECK_INTERVAL:60000}  # Check for stale jobs every minute
+    stale-check-initial-delay-ms: ${SCHEDULER_STALE_CHECK_DELAY:30000}  # Wait 30s before first stale check
+    cleanup-cron: ${SCHEDULER_CLEANUP_CRON:0 0 2 * * ?}  # Cleanup old jobs daily at 2 AM
+    cleanup-retention-days: ${SCHEDULER_CLEANUP_RETENTION:30}  # Keep completed jobs for 30 days
+    metrics-log-interval-ms: ${SCHEDULER_METRICS_INTERVAL:300000}  # Log metrics every 5 minutes
 
 # Server Configuration
 server:

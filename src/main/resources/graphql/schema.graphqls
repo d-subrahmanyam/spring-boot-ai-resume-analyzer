@@ -15,6 +15,49 @@ enum ProcessStatus {
     FAILED
 }
 
+enum UserRole {
+    ADMIN
+    RECRUITER
+    HR
+    HIRING_MANAGER
+}
+
+enum EmploymentType {
+    FULL_TIME
+    PART_TIME
+    CONTRACT
+    INTERN
+}
+
+enum EmployeeStatus {
+    ACTIVE
+    ON_LEAVE
+    SUSPENDED
+    TERMINATED
+}
+
+enum FeedbackType {
+    SHORTLIST
+    REJECT
+    INTERVIEW
+    OFFER
+    GENERAL
+    TECHNICAL
+    CULTURAL_FIT
+}
+
+enum EntityType {
+    CANDIDATE
+    JOB_REQUIREMENT
+}
+
+enum ServiceStatus {
+    UP
+    DOWN
+    DEGRADED
+    UNKNOWN
+}
+
 # Types
 type Skill {
     id: UUID!
@@ -88,6 +131,109 @@ type ProcessTracker {
     completedAt: LocalDateTime
 }
 
+type User {
+    id: UUID!
+    username: String!
+    email: String!
+    fullName: String!
+    role: UserRole!
+    isActive: Boolean!
+    lastLoginAt: LocalDateTime
+    createdAt: LocalDateTime!
+    updatedAt: LocalDateTime!
+}
+
+type Employee {
+    id: UUID!
+    employeeId: String!
+    candidate: Candidate!
+    user: User
+    department: String!
+    position: String!
+    salary: Float!
+    employmentType: EmploymentType!
+    hireDate: LocalDateTime!
+    manager: Employee
+    status: EmployeeStatus!
+    terminationDate: LocalDateTime
+    createdAt: LocalDateTime!
+    updatedAt: LocalDateTime!
+}
+
+type Feedback {
+    id: UUID!
+    entityId: UUID!
+    entityType: EntityType!
+    user: User!
+    feedbackType: FeedbackType!
+    rating: Int
+    comments: String
+    isVisible: Boolean!
+    createdAt: LocalDateTime!
+    updatedAt: LocalDateTime!
+}
+
+type SystemHealth {
+    id: UUID!
+    serviceName: String!
+    status: ServiceStatus!
+    responseTimeMs: Int
+    message: String
+    details: String
+    lastCheckedAt: LocalDateTime!
+    lastSuccessAt: LocalDateTime
+    lastFailureAt: LocalDateTime
+    failureCount: Int!
+}
+
+type AuthResponse {
+    accessToken: String!
+    refreshToken: String!
+    tokenType: String!
+    expiresIn: Int!
+    user: User!
+}
+
+type UserStatistics {
+    total: Int!
+    active: Int!
+    admins: Int!
+    recruiters: Int!
+    hr: Int!
+    hiringManagers: Int!
+}
+
+type EmployeeStatistics {
+    total: Int!
+    active: Int!
+    onLeave: Int!
+    suspended: Int!
+    terminated: Int!
+    byDepartment: [DepartmentCount!]!
+    byEmploymentType: [EmploymentTypeCount!]!
+}
+
+type DepartmentCount {
+    department: String!
+    count: Int!
+}
+
+type EmploymentTypeCount {
+    employmentType: EmploymentType!
+    count: Int!
+}
+
+type FeedbackStatistics {
+    total: Int!
+    averageRating: Float
+    byType: [FeedbackTypeCount!]!
+}
+
+type FeedbackTypeCount {
+    feedbackType: FeedbackType!
+    count: Int!
+}
+
 # Input types
 input JobRequirementInput {
     title: String!
@@ -111,6 +257,79 @@ input UpdateCandidateMatchInput {
     isSelected: Boolean
     isShortlisted: Boolean
     recruiterNotes: String
+}
+
+input LoginInput {
+    username: String!
+    password: String!
+}
+
+input RegisterInput {
+    username: String!
+    password: String!
+    email: String!
+    fullName: String!
+    role: UserRole!
+}
+
+input RefreshTokenInput {
+    refreshToken: String!
+}
+
+input ChangePasswordInput {
+    oldPassword: String!
+    newPassword: String!
+}
+
+input UserInput {
+    username: String!
+    password: String!
+    email: String!
+    fullName: String!
+    role: UserRole!
+}
+
+input UpdateUserInput {
+    email: String
+    fullName: String
+    role: UserRole
+    isActive: Boolean
+}
+
+input EmployeeInput {
+    employeeId: String!
+    candidateId: UUID!
+    userId: UUID
+    department: String!
+    position: String!
+    salary: Float!
+    employmentType: EmploymentType!
+    hireDate: LocalDateTime
+    managerId: UUID
+}
+
+input UpdateEmployeeInput {
+    department: String
+    position: String
+    salary: Float
+    employmentType: EmploymentType
+    managerId: UUID
+    status: EmployeeStatus
+}
+
+input FeedbackInput {
+    entityId: UUID!
+    entityType: EntityType!
+    feedbackType: FeedbackType!
+    rating: Int
+    comments: String
+}
+
+input UpdateFeedbackInput {
+    feedbackType: FeedbackType
+    rating: Int
+    comments: String
+    isVisible: Boolean
 }
 
 # Queries
@@ -138,7 +357,7 @@ type Query {
     
     # Candidate match queries
     matchesForCandidate(candidateId: UUID!): [CandidateMatch!]!
-    matchesForJob(jobRequirementId: UUID!): [CandidateMatch!]!
+    matchesForJob(jobRequirementId: UUID!, limit: Int): [CandidateMatch!]!
     topMatchesForJob(jobRequirementId: UUID!, limit: Int, minScore: Float): [CandidateMatch!]!
     selectedCandidatesForJob(jobRequirementId: UUID!): [CandidateMatch!]!
     shortlistedCandidatesForJob(jobRequirementId: UUID!): [CandidateMatch!]!
@@ -147,6 +366,40 @@ type Query {
     processStatus(trackerId: UUID!): ProcessTracker
     allProcessTrackers: [ProcessTracker!]!
     recentProcessTrackers(hours: Int!): [ProcessTracker!]!
+    
+    # Authentication queries
+    me: User
+    validateToken: Boolean!
+    
+    # User queries
+    user(id: UUID!): User
+    allUsers(page: Int, size: Int): [User!]!
+    usersByRole(role: UserRole!): [User!]!
+    searchUsers(searchTerm: String!): [User!]!
+    userStatistics: UserStatistics!
+    
+    # Employee queries
+    employee(id: UUID!): Employee
+    employeeByEmployeeId(employeeId: String!): Employee
+    allEmployees(page: Int, size: Int): [Employee!]!
+    employeesByDepartment(department: String!): [Employee!]!
+    employeesByStatus(status: EmployeeStatus!): [Employee!]!
+    managerSubordinates(managerId: UUID!): [Employee!]!
+    employeeStatistics: EmployeeStatistics!
+    allDepartments: [String!]!
+    
+    # Feedback queries
+    feedbackForCandidate(candidateId: UUID!): [Feedback!]!
+    feedbackForJob(jobRequirementId: UUID!): [Feedback!]!
+    feedbackByUser(userId: UUID!): [Feedback!]!
+    averageRatingForCandidate(candidateId: UUID!): Float
+    averageRatingForJob(jobRequirementId: UUID!): Float
+    feedbackStatistics(entityId: UUID!, entityType: EntityType!): FeedbackStatistics!
+    
+    # System health queries
+    systemHealth(serviceName: String!): SystemHealth
+    systemHealthReport: [SystemHealth!]!
+    overallSystemStatus: ServiceStatus!
 }
 
 # Mutations
@@ -192,6 +445,38 @@ type Mutation {
     
     # Candidate mutations
     deleteCandidate(id: UUID!): Boolean!
+    
+    # Authentication mutations
+    login(input: LoginInput!): AuthResponse!
+    register(input: RegisterInput!): AuthResponse!
+    refreshToken(input: RefreshTokenInput!): AuthResponse!
+    changePassword(input: ChangePasswordInput!): Boolean!
+    logout: Boolean!
+    
+    # User mutations
+    createUser(input: UserInput!): User!
+    updateUser(id: UUID!, input: UpdateUserInput!): User!
+    deleteUser(id: UUID!): Boolean!
+    activateUser(id: UUID!): User!
+    deactivateUser(id: UUID!): User!
+    resetUserPassword(id: UUID!, newPassword: String!): Boolean!
+    
+    # Employee mutations
+    createEmployee(input: EmployeeInput!): Employee!
+    updateEmployee(id: UUID!, input: UpdateEmployeeInput!): Employee!
+    terminateEmployee(id: UUID!, terminationDate: LocalDateTime): Employee!
+    deleteEmployee(id: UUID!): Boolean!
+    
+    # Feedback mutations
+    submitFeedback(input: FeedbackInput!): Feedback!
+    updateFeedback(id: UUID!, input: UpdateFeedbackInput!): Feedback!
+    deleteFeedback(id: UUID!): Boolean!
+    hideFeedback(id: UUID!): Feedback!
+    showFeedback(id: UUID!): Feedback!
+    
+    # System health mutations
+    checkServiceHealth(serviceName: String!): SystemHealth!
+    resetFailureCount(serviceName: String!): SystemHealth!
 }
 
 # Schema

@@ -29,7 +29,7 @@ export default defineConfig({
   /* Shared settings for all the projects below */
   use: {
     /* Base URL to use in actions like `await page.goto('/')` */
-    baseURL: 'https://localhost',
+    baseURL: process.env.PLAYWRIGHT_BASE_URL || 'https://localhost',
     
     /* Collect trace when retrying the failed test */
     trace: 'on-first-retry',

@@ -1,24 +1,69 @@
 package io.subbu.ai.firedrill.services;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.subbu.ai.firedrill.models.*;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.*;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
+
+import java.util.List;
+import java.util.Map;
 
 /**
- * Service for AI/LLM interactions using Spring AI.
- * Handles resume analysis and candidate matching using local LLM Studio.
+ * Service for AI/LLM interactions using direct HTTP calls to the LLM Studio API.
+ * Bypasses Spring AI ChatClient to avoid compatibility issues with local LLM servers.
  */
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class AIService {
 
-    private final ChatModel chatModel;
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private final RestTemplate restTemplate = new RestTemplate();
+
+    @Value("${spring.ai.openai.base-url:http://localhost:1234/v1}")
+    private String llmBaseUrl;
+
+    @Value("${spring.ai.openai.chat.options.model:mistralai/mistral-7b-instruct-v0.3}")
+    private String chatModel;
+
+    /**
+     * Call the LLM API directly via HTTP.
+     */
+    private String callLlm(String prompt) {
+        try {
+            String url = llmBaseUrl + "/chat/completions";
+            
+            Map<String, Object> requestBody = Map.of(
+                "model", chatModel,
+                "messages", List.of(Map.of("role", "user", "content", prompt)),
+                "max_tokens", 3000,
+                "temperature", 0.3
+            );
+            
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            
+            HttpEntity<Map<String, Object>> request = new HttpEntity<>(requestBody, headers);
+            ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.POST, request, String.class);
+            
+            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
+                JsonNode root = objectMapper.readTree(response.getBody());
+                JsonNode choices = root.path("choices");
+                if (choices.isArray() && choices.size() > 0) {
+                    JsonNode content = choices.get(0).path("message").path("content");
+                    if (!content.isMissingNode() && !content.isNull()) {
+                        return content.asText();
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.error("Error calling LLM API: {}", e.getMessage());
+        }
+        return null;
+    }
 
     /**
      * Analyze resume content using AI to extract candidate information.
@@ -30,14 +75,8 @@ public class AIService {
         log.info("Analyzing resume: {}", request.getFilename());
 
         String prompt = buildResumeAnalysisPrompt(request.getResumeContent());
-        
-        ChatClient client = ChatClient.create(chatModel);
-        String response = client.prompt()
-                .user(prompt)
-                .call()
-                .content();
-
-        log.debug("AI Response: {}", response);
+        String response = callLlm(prompt);
+        log.info("AI Response length: {}", response != null ? response.length() : "null");
 
         return parseResumeAnalysisResponse(response);
     }
@@ -52,13 +91,7 @@ public class AIService {
         log.info("Matching candidate for job: {}", request.getJobTitle());
 
         String prompt = buildMatchingPrompt(request);
-        
-        ChatClient client = ChatClient.create(chatModel);
-        String response = client.prompt()
-                .user(prompt)
-                .call()
-                .content();
-
+        String response = callLlm(prompt);
         log.debug("AI Matching Response: {}", response);
 
         return parseMatchingResponse(response);
@@ -83,13 +116,14 @@ public class AIService {
               "email": "Email address",
               "mobile": "Phone number",
               "experienceSummary": "Brief summary of work experience (2-3 sentences)",
-              "skills": "Comma-separated list of technical and professional skills",
-              "domainKnowledge": "Industry domains and areas of expertise",
-              "academicBackground": "Education qualifications summary",
+              "skills": "MUST be a plain string with comma-separated values e.g. Java, Spring Boot, AWS",
+              "domainKnowledge": "MUST be a plain string with comma-separated domains e.g. Fintech, Cloud",
+              "academicBackground": "Education qualifications as a plain string summary",
               "yearsOfExperience": <number>,
               "confidenceScore": <0-1 decimal>
             }
             
+            IMPORTANT: skills, domainKnowledge, and academicBackground MUST be plain strings, NOT JSON arrays.
             Extract information accurately. If a field is not found, use null or empty string.
             For yearsOfExperience, calculate based on employment history.
             For confidenceScore, rate your confidence in the extraction (0.0-1.0).
@@ -142,13 +176,13 @@ public class AIService {
             request.getSkills(),
             request.getDomainKnowledge(),
             request.getAcademicBackground(),
-            request.getYearsOfExperience(),
+            request.getYearsOfExperience() != null ? request.getYearsOfExperience() : 0,
             request.getJobTitle(),
             request.getJobDescription(),
             request.getRequiredSkills(),
             request.getRequiredEducation(),
             request.getDomainRequirements(),
-            request.getMinExperienceYears(),
+            request.getMinExperienceYears() != null ? request.getMinExperienceYears() : 0,
             request.getMaxExperienceYears() != null ? request.getMaxExperienceYears() : 100
         );
     }
@@ -166,9 +200,16 @@ public class AIService {
             return objectMapper.readValue(jsonResponse, ResumeAnalysisResponse.class);
         } catch (Exception e) {
             log.error("Failed to parse AI response: {}", aiResponse, e);
-            // Return a default response
+            // Return a default response with minimal info
             return ResumeAnalysisResponse.builder()
                     .name("Unknown")
+                    .email("")
+                    .mobile("")
+                    .experienceSummary("Resume processed (AI analysis unavailable)")
+                    .skills("")
+                    .domainKnowledge("")
+                    .academicBackground("")
+                    .yearsOfExperience(0)
                     .confidenceScore(0.0)
                     .build();
         }
@@ -201,6 +242,9 @@ public class AIService {
      * @return Extracted JSON string
      */
     private String extractJson(String response) {
+        if (response == null || response.isBlank()) {
+            throw new IllegalArgumentException("AI returned null or empty response");
+        }
         // Find first { and last }
         int startIndex = response.indexOf('{');
         int endIndex = response.lastIndexOf('}');
