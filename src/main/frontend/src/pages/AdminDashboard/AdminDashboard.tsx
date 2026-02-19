@@ -3,9 +3,9 @@
  * Displays system health, user statistics, and quick stats
  */
 
-import { useState, useEffect, useCallback } from 'react'
-import { graphqlClient } from '@/services/graphql'
-import { ADMIN_DASHBOARD_DATA, MATCH_AUDITS_QUERY } from '@/graphql/adminQueries'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { gqlRequestWithRefresh } from '@/services/graphql'
+import { ADMIN_DASHBOARD_ALL } from '@/graphql/adminQueries'
 import styles from './AdminDashboard.module.css'
 
 // Types for the dashboard data
@@ -55,6 +55,11 @@ interface DashboardData {
   overallSystemStatus: string
   userStatistics: UserStatistics
   employeeStatistics: EmployeeStatistics
+}
+
+/** Shape returned by the combined ADMIN_DASHBOARD_ALL query */
+interface AllDashboardData extends DashboardData {
+  matchAudits: MatchAudit[]
 }
 
 interface MatchAudit {
@@ -108,67 +113,117 @@ const getStatusClass = (status: string) => {
 }
 
 export default function AdminDashboard() {
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [data, setData] = useState<DashboardData | null>(null)
   const [matchAudits, setMatchAudits] = useState<MatchAudit[]>([])
-  const [auditsLoading, setAuditsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
-  const fetchDashboardData = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const result = await graphqlClient.request<DashboardData>(ADMIN_DASHBOARD_DATA)
-      setData(result)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load dashboard data')
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+  // Track whether initial load has completed (avoids making `data` a dep of fetchAll)
+  const hasLoadedRef = useRef(false)
 
-  const fetchMatchAudits = useCallback(async () => {
-    setAuditsLoading(true)
+  /**
+   * Single combined fetch — loads all dashboard panels in one GraphQL round-trip.
+   * • First call   : data is null → renders skeleton panels (no flicker).
+   * • Subsequent   : sets isRefreshing for a subtle header indicator while
+   *                  existing panels stay visible (no flash / hide-then-show).
+   */
+  const fetchAll = useCallback(async () => {
+    const isBackground = hasLoadedRef.current
+    if (isBackground) setIsRefreshing(true)
+
     try {
-      const result = await graphqlClient.request<{ matchAudits: MatchAudit[] }>(MATCH_AUDITS_QUERY)
+      const result = await gqlRequestWithRefresh<AllDashboardData>(ADMIN_DASHBOARD_ALL)
+      setData({
+        systemHealthReport: result.systemHealthReport,
+        overallSystemStatus: result.overallSystemStatus,
+        userStatistics: result.userStatistics,
+        employeeStatistics: result.employeeStatistics,
+      })
       setMatchAudits(result.matchAudits ?? [])
-    } catch {
-      // non-critical — silently fail
+      setError(null)
+      hasLoadedRef.current = true
+    } catch (err) {
+      // Surface error only on the very first load; background polls fail silently
+      if (!isBackground) {
+        setError(err instanceof Error ? err.message : 'Failed to load dashboard data')
+      }
     } finally {
-      setAuditsLoading(false)
+      setIsRefreshing(false)
     }
-  }, [])
+  }, []) // stable — uses ref, never recreated
 
   useEffect(() => {
-    fetchDashboardData()
-    fetchMatchAudits()
-    
-    // Poll every 30 seconds
-    const interval = setInterval(() => {
-      fetchDashboardData()
-      fetchMatchAudits()
-    }, 30000)
+    fetchAll()
+    const interval = setInterval(fetchAll, 30000)
     return () => clearInterval(interval)
-  }, [fetchDashboardData, fetchMatchAudits])
+  }, [fetchAll])
 
-  if (loading) {
+  // ── Skeleton (first-time load before any data arrives) ──────────────────────
+  if (!data && !error) {
     return (
       <div className={styles.container}>
-        <div className={styles.loading}>
-          <div className={styles.spinner}></div>
-          <p>Loading dashboard...</p>
+        <div className={styles.header}>
+          <h1>Admin Dashboard</h1>
+          <div className={`${styles.skeleton} ${styles.skeletonBtn}`} />
         </div>
+        {/* Status banner skeleton */}
+        <div className={`${styles.skeleton} ${styles.skeletonBanner}`} />
+        {/* Health cards skeleton */}
+        <section className={styles.section}>
+          <div className={`${styles.skeleton} ${styles.skeletonHeading}`} />
+          <div className={styles.healthGrid}>
+            {[0, 1, 2, 3].map((i) => (
+              <div key={i} className={styles.healthCard}>
+                <div className={styles.healthCardHeader}>
+                  <div className={`${styles.skeleton} ${styles.skeletonLine}`} />
+                  <div className={`${styles.skeleton} ${styles.skeletonBadge}`} />
+                </div>
+                <div className={styles.healthCardBody}>
+                  {[0, 1, 2].map((j) => (
+                    <div key={j} className={`${styles.skeleton} ${styles.skeletonLineShort}`} />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+        {/* Stats cards skeleton */}
+        <div className={styles.statsGrid}>
+          {[0, 1, 2, 3].map((i) => (
+            <section key={i} className={styles.statsCard}>
+              <div className={`${styles.skeleton} ${styles.skeletonHeading}`} />
+              {[0, 1, 2, 3, 4].map((j) => (
+                <div key={j} className={styles.statRow}>
+                  <div className={`${styles.skeleton} ${styles.skeletonStatLabel}`} />
+                  <div className={`${styles.skeleton} ${styles.skeletonStatValue}`} />
+                </div>
+              ))}
+            </section>
+          ))}
+        </div>
+        {/* Audit panel skeleton */}
+        <section className={styles.auditSection}>
+          <div className={styles.auditHeader}>
+            <div className={`${styles.skeleton} ${styles.skeletonHeading}`} />
+          </div>
+          <div className={styles.auditLoading}>
+            <div className={`${styles.skeleton} ${styles.skeletonAuditRow}`} />
+            <div className={`${styles.skeleton} ${styles.skeletonAuditRow}`} />
+            <div className={`${styles.skeleton} ${styles.skeletonAuditRow}`} />
+          </div>
+        </section>
       </div>
     )
   }
 
-  if (error) {
+  // ── Error state (first load failed) ────────────────────────────────
+  if (error && !data) {
     return (
       <div className={styles.container}>
         <div className={styles.error}>
           <h2>Error Loading Dashboard</h2>
           <p>{error}</p>
-          <button onClick={fetchDashboardData} className={styles.retryButton}>
+          <button onClick={fetchAll} className={styles.retryButton}>
             Retry
           </button>
         </div>
@@ -176,11 +231,7 @@ export default function AdminDashboard() {
     )
   }
 
-  if (!data) {
-    return null
-  }
-
-  const { systemHealthReport, overallSystemStatus, userStatistics, employeeStatistics } = data
+  const { systemHealthReport, overallSystemStatus, userStatistics, employeeStatistics } = data!
 
   const formatDuration = (ms?: number) => {
     if (!ms) return '—'
@@ -212,9 +263,12 @@ export default function AdminDashboard() {
     <div className={styles.container}>
       <div className={styles.header}>
         <h1>Admin Dashboard</h1>
-        <button onClick={fetchDashboardData} className={styles.refreshButton}>
-          🔄 Refresh
-        </button>
+        <div className={styles.headerActions}>
+          {isRefreshing && <span className={styles.refreshingBadge}>Refreshing…</span>}
+          <button onClick={fetchAll} className={styles.refreshButton}>
+            🔄 Refresh
+          </button>
+        </div>
       </div>
 
       {/* Overall System Status */}
@@ -360,7 +414,7 @@ export default function AdminDashboard() {
         <div className={styles.auditHeader}>
           <h2>🎯 Candidate Match Runs</h2>
           <button
-            onClick={fetchMatchAudits}
+            onClick={fetchAll}
             className={styles.refreshButton}
             title="Refresh match audits"
           >
@@ -368,17 +422,17 @@ export default function AdminDashboard() {
           </button>
         </div>
 
-        {auditsLoading && (
+        {isRefreshing && matchAudits.length === 0 && (
           <div className={styles.auditLoading}>Loading match audits…</div>
         )}
 
-        {!auditsLoading && matchAudits.length === 0 && (
+        {!isRefreshing && matchAudits.length === 0 && (
           <div className={styles.auditEmpty}>
             No match runs recorded yet. Run a candidate match to see audit data here.
           </div>
         )}
 
-        {!auditsLoading && matchAudits.length > 0 && (
+        {!isRefreshing && matchAudits.length > 0 && (
           <div className={styles.auditTableWrapper}>
             <table className={styles.auditTable}>
               <thead>

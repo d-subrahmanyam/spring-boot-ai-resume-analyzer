@@ -105,6 +105,69 @@ export const ADMIN_DASHBOARD_DATA = `
 `
 
 /**
+ * Single combined query — fetches all AdminDashboard data in one round trip.
+ * Replaces the separate ADMIN_DASHBOARD_DATA + MATCH_AUDITS_QUERY calls to
+ * eliminate the flicker / double-render that occurred when two requests
+ * completed at different times.
+ */
+export const ADMIN_DASHBOARD_ALL = `
+  query AdminDashboardAll {
+    systemHealthReport {
+      id
+      serviceName
+      status
+      responseTimeMs
+      message
+      lastCheckedAt
+      lastSuccessAt
+      lastFailureAt
+      failureCount
+    }
+    overallSystemStatus
+    userStatistics {
+      total
+      active
+      admins
+      recruiters
+      hr
+      hiringManagers
+    }
+    employeeStatistics {
+      total
+      active
+      onLeave
+      suspended
+      terminated
+      byDepartment {
+        department
+        count
+      }
+      byEmploymentType {
+        employmentType
+        count
+      }
+    }
+    matchAudits(limit: 30) {
+      id
+      jobRequirementId
+      jobTitle
+      totalCandidates
+      successfulMatches
+      shortlistedCount
+      averageMatchScore
+      highestMatchScore
+      durationMs
+      estimatedTokensUsed
+      status
+      initiatedBy
+      errorMessage
+      initiatedAt
+      completedAt
+    }
+  }
+`
+
+/**
  * Query match audits for the admin panel
  */
 export const MATCH_AUDITS_QUERY = `

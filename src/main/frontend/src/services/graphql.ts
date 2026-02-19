@@ -50,6 +50,42 @@ async function tryRefreshToken(): Promise<string | null> {
 }
 
 /**
+ * Show a session-expired banner and redirect to /login after a short delay.
+ * This gives the user a readable explanation instead of a raw 401 error.
+ */
+function handleSessionExpired(): void {
+  // Don't create multiple banners if called concurrently
+  if (document.getElementById('__session-expired-banner__')) return
+
+  localStorage.clear()
+
+  const banner = document.createElement('div')
+  banner.id = '__session-expired-banner__'
+  banner.innerHTML =
+    '⏰&nbsp;&nbsp;Your session has expired. Redirecting to login&hellip;'
+  banner.style.cssText = [
+    'position:fixed',
+    'top:0',
+    'left:0',
+    'right:0',
+    'padding:0.9rem 2rem',
+    'background:#c53030',
+    'color:#fff',
+    'text-align:center',
+    'z-index:99999',
+    'font-weight:600',
+    'font-size:0.95rem',
+    'box-shadow:0 2px 8px rgba(0,0,0,0.35)',
+    'letter-spacing:0.01em',
+  ].join(';')
+  document.body.appendChild(banner)
+
+  setTimeout(() => {
+    window.location.href = '/login'
+  }, 2500)
+}
+
+/**
  * Check if a GraphQL error response contains an UNAUTHORIZED error.
  */
 function isUnauthorizedError(error: unknown): boolean {
@@ -95,9 +131,8 @@ export async function gqlRequestWithRefresh<T = any>(
         })
         return await retryClient.request<T>(query, variables)
       } else {
-        // Refresh failed — redirect to login
-        localStorage.clear()
-        window.location.href = '/login'
+        // Refresh failed — show message and redirect to login
+        handleSessionExpired()
         throw error
       }
     }
@@ -113,6 +148,13 @@ export const graphqlClient = new GraphQLClient(endpoint, {
       ...buildHeaders(),
     },
   }),
+  responseMiddleware: (response) => {
+    // Handle JWT expiry globally — any page using graphqlClient gets the
+    // friendly redirect instead of cryptic "Unauthorized" errors.
+    if (response instanceof Error && isUnauthorizedError(response)) {
+      handleSessionExpired()
+    }
+  },
 })
 
 // GraphQL Queries

@@ -28,6 +28,27 @@
   margin-bottom: 2rem;
 }
 
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.refreshingBadge {
+  font-size: 0.8rem;
+  color: #667eea;
+  font-weight: 500;
+  padding: 0.25rem 0.65rem;
+  background: #eef2ff;
+  border-radius: 999px;
+  animation: fadeInOut 1.5s ease-in-out infinite;
+}
+
+@keyframes fadeInOut {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
 .header h1 {
   font-size: 2rem;
   color: #1a202c;
@@ -453,4 +474,81 @@
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50%       { opacity: 0.65; }
+}
+
+/* ── Skeleton / Shimmer Loaders ─────────────────────────────── */
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+
+/* Base shimmer element */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    #f0f0f0 25%,
+    #e0e8f0 50%,
+    #f0f0f0 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
+  border-radius: 6px;
+}
+
+/* Specific skeleton shapes */
+.skeletonBanner {
+  height: 52px;
+  border-radius: 8px;
+  margin-bottom: 2rem;
+}
+
+.skeletonHeading {
+  height: 22px;
+  width: 40%;
+  margin-bottom: 1rem;
+  border-radius: 4px;
+}
+
+.skeletonBtn {
+  height: 36px;
+  width: 100px;
+  border-radius: 6px;
+}
+
+.skeletonBadge {
+  height: 22px;
+  width: 72px;
+  border-radius: 12px;
+}
+
+.skeletonLine {
+  height: 16px;
+  width: 55%;
+  border-radius: 4px;
+}
+
+.skeletonLineShort {
+  height: 14px;
+  width: 80%;
+  border-radius: 4px;
+  margin-top: 0.4rem;
+}
+
+.skeletonStatLabel {
+  height: 14px;
+  width: 55%;
+  border-radius: 4px;
+}
+
+.skeletonStatValue {
+  height: 18px;
+  width: 28%;
+  border-radius: 4px;
+}
+
+.skeletonAuditRow {
+  height: 28px;
+  width: 100%;
+  border-radius: 4px;
+  margin-bottom: 0.5rem;
 }
