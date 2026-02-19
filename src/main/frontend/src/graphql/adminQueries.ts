@@ -103,3 +103,43 @@ export const ADMIN_DASHBOARD_DATA = `
     }
   }
 `
+
+/**
+ * Query match audits for the admin panel
+ */
+export const MATCH_AUDITS_QUERY = `
+  query {
+    matchAudits(limit: 30) {
+      id
+      jobRequirementId
+      jobTitle
+      totalCandidates
+      successfulMatches
+      shortlistedCount
+      averageMatchScore
+      highestMatchScore
+      durationMs
+      estimatedTokensUsed
+      status
+      initiatedBy
+      errorMessage
+      initiatedAt
+      completedAt
+    }
+  }
+`
+
+/**
+ * Query active (in-progress) match runs
+ */
+export const ACTIVE_MATCH_RUNS_QUERY = `
+  query {
+    activeMatchRuns {
+      id
+      jobTitle
+      initiatedBy
+      initiatedAt
+      status
+    }
+  }
+`

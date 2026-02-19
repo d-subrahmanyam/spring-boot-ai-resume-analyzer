@@ -1,5 +1,103 @@
 # Resume Analyzer - Change Summary
 
+## ✅ Phase 4: Candidate Matching UX, Async Audit Capture & Collapsible Sidebar (February 19, 2026)
+
+**Status**: ✅ Complete  
+**Scope**: Loading indicators, match-in-progress guards, async audit DB capture, admin audit panel, collapsible icon sidebar, lucide-react icons
+
+### Phase 4.1: Loading Indicator & Match Guards (Frontend)
+
+**Modified files:**
+- `src/main/frontend/src/pages/CandidateMatching.tsx` — Loading overlay, disabled button with inline spinner, `beforeunload` guard, duplicate-match warning banner, error banner
+- `src/main/frontend/src/pages/CandidateMatching.module.css` — New styles: `loadingOverlay`, `spinner`, `progressDots`, `warningBanner`, `errorBanner`, `loadingButton`
+
+**Changes:**
+- Full-screen loading overlay with animated spinner and three-dot progress indicator while AI matching runs
+- "Match All" button shows inline spinner + "Matching in Progress…" text; set to `disabled` + `aria-busy=true` during active run — prevents duplicate submissions
+- Warning banner auto-dismisses after 5 s if user clicks "Match All" while already in progress
+- `beforeunload` event guard registered/unregistered as `isMatching` state changes — warns user before accidental browser close or page reload
+
+### Phase 4.2: Async Match Audit Capture (Backend)
+
+**New files:**
+- `src/main/java/io/subbu/ai/firedrill/entities/MatchAudit.java` — JPA entity mapping to `match_audits` table (17 columns: jobId, jobTitle, status, candidatesMatched, shortlisted, avgScore, topScore, durationMs, estimatedTokens, initiatedBy, startedAt, completedAt, errorMessage)
+- `src/main/java/io/subbu/ai/firedrill/repositories/MatchAuditRepository.java` — Spring Data JPA repo with `findByJobRequirementIdOrderByStartedAtDesc` and `findByStatusOrderByStartedAtDesc`
+- `src/main/java/io/subbu/ai/firedrill/services/MatchAuditService.java` — `createAudit()` (synchronous, creates IN_PROGRESS record), `@Async completeAudit()` (updates with final stats), `@Async failAudit()` (records error)
+- `src/main/java/io/subbu/ai/firedrill/resolver/MatchAuditResolver.java` — Admin-only GraphQL resolver for `matchAudits(limit)`, `matchAuditsForJob(jobRequirementId)`, `activeMatchRuns`
+
+**Modified files:**
+- `src/main/java/io/subbu/ai/firedrill/services/CandidateMatchingService.java` — Wraps match loop with full audit lifecycle: `createAudit()` before loop, `completeAudit()` on success, `failAudit()` on exception
+- `src/main/resources/graphql/schema.graphqls` — Added `MatchAudit` type (17 fields) and 3 admin queries
+
+**DB table:** `match_audits` — auto-created by Hibernate `ddl-auto: update`. No migration script required.
+
+**Bug fix in this phase:**
+- `MatchAuditService.java` log statement used Python-style `{:.1f}` format specifier → replaced with `String.format("%.1f", stats.avg())` to produce correct Java log output
+
+### Phase 4.3: Admin Dashboard — Match Runs Audit Panel
+
+**Modified files:**
+- `src/main/frontend/src/pages/AdminDashboard.tsx` — Added `MatchAudit` TypeScript interface, `matchAudits` state, `fetchMatchAudits` callback (admin-only GraphQL), audit panel JSX with status badges, auto-poll every 30 s, manual Refresh button
+- `src/main/frontend/src/pages/AdminDashboard.module.css` — New styles: `auditSection`, `auditTable`, `auditStatusBadge`, status-specific badge colours (`completed`, `inProgress`, `failed`)
+- `src/main/frontend/src/graphql/adminQueries.ts` — Added `MATCH_AUDITS_QUERY` with all 17 MatchAudit fields
+
+**Audit panel columns:** Job Title, Status (badge), Candidates Matched, Shortlisted, Avg Score, Top Score, Duration, Est. Tokens, Initiated By, Started At
+
+### Phase 4.4: Collapsible Sidebar with Icon-Only Mode
+
+**Modified files:**
+- `src/main/frontend/src/components/Layout.tsx` — Complete rewrite: sidebar collapse/expand toggle button (chevron icon), `sidebarCollapsed` state persisted to `localStorage`, conditional rendering of nav labels vs icon-only, `lucide-react` icons for each nav item (LayoutDashboard, Users, Briefcase, Upload, Brain, Star, Settings, UserCheck)
+- `src/main/frontend/src/components/Layout.module.css` — Complete rewrite: CSS custom properties for sidebar widths (`--sidebar-expanded: 230px`, `--sidebar-collapsed: 62px`), smooth CSS transitions on sidebar width and opacity, `navItem`/`navItemCollapsed` classes, `collapseToggle` button, responsive main content margin
+
+**New npm package:** `lucide-react` — React icon library for sidebar navigation icons
+
+**Behaviour:**
+- Sidebar expands to 230 px (icons + text labels) or collapses to 62 px (icons only)
+- Toggle chevron appears at the bottom of the sidebar
+- Collapse state persists across page reloads via `localStorage`
+
+### Phase 4.5: Bug Fixes
+
+| File | Bug | Fix |
+|------|-----|-----|
+| `MatchAuditService.java` | `{:.1f}` Python-style format in Java log statement | Replaced with `String.format("%.1f", stats.avg())` |
+
+### Test Results
+
+| Suite | Count | Status |
+|-------|-------|--------|
+| Backend Unit Tests | 124 | ✅ 100% passing |
+| Frontend Unit Tests | 89 | ✅ 100% passing |
+| E2E Tests (Playwright) | 103 | ✅ 100% passing |
+| **Total** | **316** | **✅ All passing** |
+
+E2E test count increased from 89 → 103 (+14 tests covering new loading overlay, sidebar collapse, and matching guard behaviours). No regressions in any existing test suite.
+
+### UI Test Screenshots
+
+13 screenshots captured via Chrome MCP DevTools and saved to `docs/images/`:
+
+| File | What it shows |
+|------|--------------|
+| `ui-test-01-dashboard-expanded-sidebar.png` | Dashboard with fully expanded sidebar (icons + labels) |
+| `ui-test-02-dashboard-collapsed-sidebar.png` | Dashboard with sidebar collapsed to icon-only mode |
+| `ui-test-03-admin-dashboard-top.png` | Admin Dashboard top section |
+| `ui-test-04-admin-audit-panel-empty.png` | Match Runs audit panel — empty state (no runs yet) |
+| `ui-test-04b-admin-dashboard-full.png` | Full-page admin dashboard scroll |
+| `ui-test-06-matching-job-selected.png` | Candidate Matching page with a job selected |
+| `ui-test-06-matching-with-results.png` | Matching page showing previous match results |
+| `ui-test-07-matching-loading-overlay.png` | Loading overlay appearing at match start |
+| `ui-test-07b-loading-overlay-active.png` | Loading overlay with spinner + progress dots active |
+| `ui-test-08b-matching-completed.png` | Matching page after run completes |
+| `ui-test-09-admin-audit-after-match.png` | Audit panel refreshed to show new audit record |
+| `ui-test-09b-audit-panel-completed.png` | Audit panel showing full details (scores, tokens, duration) |
+| `ui-test-10-sidebar-collapsed-admin.png` | Collapsed sidebar on Admin Dashboard |
+| `ui-test-11-matching-collapsed-sidebar.png` | Collapsed sidebar on Candidate Matching page |
+
+Full test report: [`docs/UI-FEATURE-TEST-REPORT.md`](docs/UI-FEATURE-TEST-REPORT.md)
+
+---
+
 ## ✅ Phase 3: RBAC, Authentication & Bug Fixes (February 18, 2026)
 
 **Status**: ✅ Complete  

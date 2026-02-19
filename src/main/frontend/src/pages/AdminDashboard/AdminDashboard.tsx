@@ -5,7 +5,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { graphqlClient } from '@/services/graphql'
-import { ADMIN_DASHBOARD_DATA } from '@/graphql/adminQueries'
+import { ADMIN_DASHBOARD_DATA, MATCH_AUDITS_QUERY } from '@/graphql/adminQueries'
 import styles from './AdminDashboard.module.css'
 
 // Types for the dashboard data
@@ -57,6 +57,24 @@ interface DashboardData {
   employeeStatistics: EmployeeStatistics
 }
 
+interface MatchAudit {
+  id: string
+  jobRequirementId: string
+  jobTitle: string
+  totalCandidates: number
+  successfulMatches: number
+  shortlistedCount: number
+  averageMatchScore?: number
+  highestMatchScore?: number
+  durationMs?: number
+  estimatedTokensUsed?: number
+  status: string
+  initiatedBy?: string
+  errorMessage?: string
+  initiatedAt: string
+  completedAt?: string
+}
+
 // Service status icon mapping
 const getStatusIcon = (status: string) => {
   switch (status) {
@@ -93,6 +111,8 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [data, setData] = useState<DashboardData | null>(null)
+  const [matchAudits, setMatchAudits] = useState<MatchAudit[]>([])
+  const [auditsLoading, setAuditsLoading] = useState(false)
 
   const fetchDashboardData = useCallback(async () => {
     setLoading(true)
@@ -107,13 +127,29 @@ export default function AdminDashboard() {
     }
   }, [])
 
+  const fetchMatchAudits = useCallback(async () => {
+    setAuditsLoading(true)
+    try {
+      const result = await graphqlClient.request<{ matchAudits: MatchAudit[] }>(MATCH_AUDITS_QUERY)
+      setMatchAudits(result.matchAudits ?? [])
+    } catch {
+      // non-critical — silently fail
+    } finally {
+      setAuditsLoading(false)
+    }
+  }, [])
+
   useEffect(() => {
     fetchDashboardData()
+    fetchMatchAudits()
     
     // Poll every 30 seconds
-    const interval = setInterval(fetchDashboardData, 30000)
+    const interval = setInterval(() => {
+      fetchDashboardData()
+      fetchMatchAudits()
+    }, 30000)
     return () => clearInterval(interval)
-  }, [fetchDashboardData])
+  }, [fetchDashboardData, fetchMatchAudits])
 
   if (loading) {
     return (
@@ -145,6 +181,32 @@ export default function AdminDashboard() {
   }
 
   const { systemHealthReport, overallSystemStatus, userStatistics, employeeStatistics } = data
+
+  const formatDuration = (ms?: number) => {
+    if (!ms) return '—'
+    if (ms < 1000) return `${ms}ms`
+    return `${(ms / 1000).toFixed(1)}s`
+  }
+
+  const formatScore = (score?: number) => (score != null ? `${score.toFixed(1)}%` : '—')
+
+  const getAuditStatusClass = (status: string) => {
+    switch (status) {
+      case 'COMPLETED':  return styles.auditCompleted
+      case 'IN_PROGRESS': return styles.auditInProgress
+      case 'FAILED':     return styles.auditFailed
+      default:           return ''
+    }
+  }
+
+  const getAuditStatusLabel = (status: string) => {
+    switch (status) {
+      case 'COMPLETED':  return '✓ Completed'
+      case 'IN_PROGRESS': return '⟳ In Progress'
+      case 'FAILED':     return '✗ Failed'
+      default:           return status
+    }
+  }
 
   return (
     <div className={styles.container}>
@@ -292,6 +354,83 @@ export default function AdminDashboard() {
           </div>
         </section>
       </div>
+
+      {/* ── Match Runs Audit Panel ─────────────────────────────── */}
+      <section className={styles.auditSection}>
+        <div className={styles.auditHeader}>
+          <h2>🎯 Candidate Match Runs</h2>
+          <button
+            onClick={fetchMatchAudits}
+            className={styles.refreshButton}
+            title="Refresh match audits"
+          >
+            🔄 Refresh
+          </button>
+        </div>
+
+        {auditsLoading && (
+          <div className={styles.auditLoading}>Loading match audits…</div>
+        )}
+
+        {!auditsLoading && matchAudits.length === 0 && (
+          <div className={styles.auditEmpty}>
+            No match runs recorded yet. Run a candidate match to see audit data here.
+          </div>
+        )}
+
+        {!auditsLoading && matchAudits.length > 0 && (
+          <div className={styles.auditTableWrapper}>
+            <table className={styles.auditTable}>
+              <thead>
+                <tr>
+                  <th>Job Title</th>
+                  <th>Status</th>
+                  <th>Candidates</th>
+                  <th>Shortlisted</th>
+                  <th>Avg Score</th>
+                  <th>Top Score</th>
+                  <th>Duration</th>
+                  <th>Est. Tokens</th>
+                  <th>Initiated By</th>
+                  <th>Initiated At</th>
+                  <th>Completed At</th>
+                </tr>
+              </thead>
+              <tbody>
+                {matchAudits.map((audit) => (
+                  <tr key={audit.id}>
+                    <td className={styles.auditJobTitle}>{audit.jobTitle || '—'}</td>
+                    <td>
+                      <span className={`${styles.auditStatus} ${getAuditStatusClass(audit.status)}`}>
+                        {getAuditStatusLabel(audit.status)}
+                      </span>
+                    </td>
+                    <td className={styles.auditNum}>{audit.totalCandidates}</td>
+                    <td className={styles.auditNum}>{audit.shortlistedCount}</td>
+                    <td className={styles.auditNum}>{formatScore(audit.averageMatchScore)}</td>
+                    <td className={styles.auditNum}>{formatScore(audit.highestMatchScore)}</td>
+                    <td className={styles.auditNum}>{formatDuration(audit.durationMs)}</td>
+                    <td className={styles.auditNum}>
+                      {audit.estimatedTokensUsed != null
+                        ? audit.estimatedTokensUsed.toLocaleString()
+                        : '—'}
+                    </td>
+                    <td>{audit.initiatedBy || '—'}</td>
+                    <td className={styles.auditDate}>
+                      {new Date(audit.initiatedAt).toLocaleString()}
+                    </td>
+                    <td className={styles.auditDate}>
+                      {audit.completedAt
+                        ? new Date(audit.completedAt).toLocaleString()
+                        : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
     </div>
   )
 }

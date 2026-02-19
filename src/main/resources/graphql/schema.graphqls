@@ -234,6 +234,26 @@ type FeedbackTypeCount {
     count: Int!
 }
 
+type MatchAudit {
+    id: UUID!
+    jobRequirementId: UUID!
+    jobTitle: String
+    totalCandidates: Int!
+    successfulMatches: Int!
+    shortlistedCount: Int!
+    averageMatchScore: Float
+    highestMatchScore: Float
+    durationMs: Int
+    estimatedTokensUsed: Int
+    status: String!
+    initiatedBy: String
+    matchSummaries: String
+    errorMessage: String
+    initiatedAt: LocalDateTime!
+    completedAt: LocalDateTime
+    createdAt: LocalDateTime!
+}
+
 # Input types
 input JobRequirementInput {
     title: String!
@@ -400,6 +420,11 @@ type Query {
     systemHealth(serviceName: String!): SystemHealth
     systemHealthReport: [SystemHealth!]!
     overallSystemStatus: ServiceStatus!
+
+    # Match audit queries (admin only)
+    matchAudits(limit: Int): [MatchAudit!]!
+    matchAuditsForJob(jobRequirementId: UUID!): [MatchAudit!]!
+    activeMatchRuns: [MatchAudit!]!
 }
 
 # Mutations

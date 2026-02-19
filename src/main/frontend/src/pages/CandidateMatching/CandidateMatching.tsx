@@ -14,8 +14,9 @@ const CandidateMatching = () => {
   const dispatch = useDispatch()
   const { candidates } = useSelector((state: RootState) => state.candidates)
   const { jobs } = useSelector((state: RootState) => state.jobs)
-  const { matches, matchingInProgress } = useSelector((state: RootState) => state.matches)
+  const { matches, matchingInProgress, error } = useSelector((state: RootState) => state.matches)
   const [selectedJobId, setSelectedJobId] = useState<string>('')
+  const [alreadyMatchingWarning, setAlreadyMatchingWarning] = useState(false)
 
   useEffect(() => {
     dispatch(fetchCandidates())
@@ -28,10 +29,26 @@ const CandidateMatching = () => {
     }
   }, [selectedJobId, dispatch])
 
-  const handleMatchAll = () => {
-    if (selectedJobId) {
-      dispatch(matchAllCandidatesToJob(selectedJobId))
+  // Block browser tab close / page reload while matching is in progress
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (matchingInProgress) {
+        e.preventDefault()
+        e.returnValue = ''
+      }
     }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [matchingInProgress])
+
+  const handleMatchAll = () => {
+    if (!selectedJobId) return
+    if (matchingInProgress) {
+      setAlreadyMatchingWarning(true)
+      setTimeout(() => setAlreadyMatchingWarning(false), 5000)
+      return
+    }
+    dispatch(matchAllCandidatesToJob(selectedJobId))
   }
 
   const handleShortlist = (matchId: string, currentStatus: boolean) => {
@@ -59,6 +76,40 @@ const CandidateMatching = () => {
     <div className={styles.matching}>
       <h2>Candidate Matching</h2>
 
+      {/* Full-screen loading overlay while matching */}
+      {matchingInProgress && (
+        <div className={styles.loadingOverlay}>
+          <div className={styles.loadingCard}>
+            <div className={styles.spinner}></div>
+            <h3>Matching Candidates…</h3>
+            <p>
+              Our AI is evaluating each candidate against this job requirement.
+              This may take a minute depending on the number of candidates.
+            </p>
+            <div className={styles.progressDots}>
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* "Already in progress" inline warning */}
+      {alreadyMatchingWarning && (
+        <div className={styles.warningBanner} role="alert">
+          ⚠️ A match run is already in progress. Please wait for it to finish
+          before starting a new one.
+        </div>
+      )}
+
+      {/* Error banner */}
+      {error && !matchingInProgress && (
+        <div className={styles.errorBanner} role="alert">
+          ❌ Matching failed: {error}
+        </div>
+      )}
+
       <div className={styles.controls}>
         <div className={styles.jobSelect}>
           <label htmlFor="job-selector">Select Job Requirement:</label>
@@ -82,10 +133,19 @@ const CandidateMatching = () => {
         {selectedJobId && (
           <button
             onClick={handleMatchAll}
-            className={styles.matchButton}
+            className={`${styles.matchButton} ${matchingInProgress ? styles.matchButtonBusy : ''}`}
             disabled={matchingInProgress}
+            title={matchingInProgress ? 'Match already in progress' : 'Run AI match for all candidates'}
+            aria-busy={matchingInProgress}
           >
-            {matchingInProgress ? 'Matching...' : 'Match All Candidates'}
+            {matchingInProgress ? (
+              <span className={styles.matchButtonInner}>
+                <span className={styles.buttonSpinner}></span>
+                Matching in Progress…
+              </span>
+            ) : (
+              '🎯 Match All Candidates'
+            )}
           </button>
         )}
       </div>
@@ -94,8 +154,8 @@ const CandidateMatching = () => {
         <div className={styles.jobInfo}>
           <h3>{selectedJob.title}</h3>
           <p>
-            <strong>Experience:</strong> {selectedJob.minExperienceYears} - {selectedJob.maxExperienceYears}{' '}
-            years
+            <strong>Experience:</strong> {selectedJob.minExperienceYears} -{' '}
+            {selectedJob.maxExperienceYears} years
           </p>
           <p>
             <strong>Required Skills:</strong> {selectedJob.requiredSkills}
@@ -103,9 +163,9 @@ const CandidateMatching = () => {
         </div>
       )}
 
-      {matchesWithCandidates.length === 0 && selectedJobId && (
+      {matchesWithCandidates.length === 0 && selectedJobId && !matchingInProgress && (
         <div className={styles.empty}>
-          <p>No matches found. Click "Match All Candidates" to generate AI-powered matches.</p>
+          <p>No matches found. Click &quot;🎯 Match All Candidates&quot; to generate AI-powered matches.</p>
         </div>
       )}
 

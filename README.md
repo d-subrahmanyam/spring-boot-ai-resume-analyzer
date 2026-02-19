@@ -4,7 +4,18 @@
 
 Resume Analyzer is an AI-powered application that analyzes resumes, extracts candidate information, and matches candidates to job requirements using local LLM (Large Language Model) capabilities.
 
-## Recent Updates (February 18, 2026)
+## Recent Updates (February 19, 2026)
+
+- **🎯 Phase 4: Candidate Matching UX — Loading Indicators, Audit Capture & Collapsible Sidebar**
+  - **Loading overlay**: Full-screen spinner + animated progress dots while AI matching runs; button shows inline spinner and "Matching in Progress…" with `disabled` + `aria-busy` attributes
+  - **Duplicate-match guard**: Clicking "Match All" while a match is already running shows a warning banner (auto-dismisses after 5 s) — prevents redundant LLM calls
+  - **Navigate-away warning**: `beforeunload` browser event guard prevents accidental tab close / page reload while a match is in progress
+  - **Async match audit capture**: Every `matchAllCandidatesToJob` run creates a `MatchAudit` DB record (`match_audits` table, auto-created by Hibernate). `createAudit()` is synchronous (IN_PROGRESS), then `@Async completeAudit()` / `failAudit()` write final stats without blocking the GraphQL response
+  - **Admin Dashboard — Match Runs panel**: New "🎯 Candidate Match Runs" table showing Job Title, Status badge (Completed / In Progress / Failed), Candidates matched, Shortlisted count, Avg & Top scores, Duration, Estimated LLM tokens, Initiated by, timestamps — auto-polls every 30 s with manual Refresh button
+  - **New GraphQL queries** (admin-only): `matchAudits(limit)`, `matchAuditsForJob(jobRequirementId)`, `activeMatchRuns`
+  - **Collapsible sidebar**: Sidebar now collapses to icon-only mode (62 px) via a chevron toggle; expands to full 230 px with text labels. State persists in `localStorage`. Icons powered by `lucide-react`
+  - **E2E tests**: 103 tests passing (previously 89); no regressions
+  - **Docs**: Screenshot-based UI test report saved to `docs/UI-FEATURE-TEST-REPORT.md`
 
 - **🔐 Phase 3: RBAC Implementation Complete**: Full Role-Based Access Control system with 4 roles (Admin, Recruiter, HR, Hiring Manager)
   - JWT-based authentication with Spring Security — login/logout flow, token refresh
@@ -48,10 +59,10 @@ Resume Analyzer is an AI-powered application that analyzes resumes, extracts can
 
 | Test Suite | Tests | Status | Coverage Target | Tools |
 |------------|-------|--------|----------------|-------|
-| **Backend Unit Tests** | 62 | ✅ 100% passing (62/62) | 80%+ | JUnit 5, Mockito, Testcontainers |
+| **Backend Unit Tests** | 124 | ✅ 100% passing (124/124) | 80%+ | JUnit 5, Mockito, Testcontainers |
 | **Frontend Unit Tests** | 89 | ✅ 100% passing (89/89) | 70%+ | Vitest, React Testing Library, MSW |
-| **E2E Tests** | 89 | ✅ 100% passing (89/89) | Full UI coverage | Playwright (5 browsers) |
-| **Total** | **240 tests** | **✅ 100% passing (240/240)** | - | - |
+| **E2E Tests** | 103 | ✅ 100% passing (103/103) | Full UI coverage | Playwright (Chromium) |
+| **Total** | **316 tests** | **✅ 100% passing (316/316)** | - | - |
 
 ### Test Coverage Breakdown
 
@@ -65,9 +76,9 @@ Resume Analyzer is an AI-powered application that analyzes resumes, extracts can
 - ✅ React Components (35 tests): UI components & user interactions (MSW GraphQL mocking)
 - ✅ API Services (17 tests): GraphQL & REST clients with MSW request interception
 
-**E2E Testing (89 tests)**
+**E2E Testing (103 tests)**
 - ✅ Cross-browser: Chromium, Firefox, WebKit, Mobile (Chrome & Safari)
-- ✅ Feature coverage: Dashboard (7), Skills (10), Jobs (11), Upload (18), Candidates (23), Matching (20)
+- ✅ Feature coverage: Dashboard (7), Skills (10), Jobs (11), Upload (18), Candidates (23), Matching (20), RBAC (14)
 - ✅ Integration scenarios: End-to-end workflows across all features
 
 ### Quick Test Commands
@@ -118,6 +129,38 @@ Centralized skills management system for maintaining standardized skill names.
 AI-powered candidate matching against job requirements.
 
 ![Candidate Matching](docs/images/candidate-matching.png)
+
+### Phase 4 UI — Loading UX, Audit Panel & Collapsible Sidebar
+
+**Expanded sidebar — Dashboard view**
+![Dashboard with expanded sidebar](docs/images/ui-test-01-dashboard-expanded-sidebar.png)
+
+**Collapsed sidebar — icon-only mode (62 px)**
+![Collapsed sidebar](docs/images/ui-test-02-dashboard-collapsed-sidebar.png)
+
+**Admin Dashboard — Match Runs audit panel (empty state)**
+![Admin audit panel empty](docs/images/ui-test-04-admin-audit-panel-empty.png)
+
+**Candidate Matching — loading overlay while AI runs**
+![Loading overlay](docs/images/ui-test-07-matching-loading-overlay.png)
+
+**Loading overlay active with spinner + progress dots**
+![Loading overlay active](docs/images/ui-test-07b-loading-overlay-active.png)
+
+**Matching completed — results displayed**
+![Matching completed](docs/images/ui-test-08b-matching-completed.png)
+
+**Admin audit panel — after a successful match run**
+![Audit panel after match](docs/images/ui-test-09-admin-audit-after-match.png)
+
+**Audit panel showing completed run details (scores, tokens, duration)**
+![Audit panel completed](docs/images/ui-test-09b-audit-panel-completed.png)
+
+**Collapsed sidebar — Admin Dashboard view**
+![Collapsed sidebar admin](docs/images/ui-test-10-sidebar-collapsed-admin.png)
+
+**Collapsed sidebar — Candidate Matching page**
+![Collapsed sidebar matching](docs/images/ui-test-11-matching-collapsed-sidebar.png)
 
 ## Architecture
 

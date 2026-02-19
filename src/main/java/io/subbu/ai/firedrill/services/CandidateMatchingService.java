@@ -1,8 +1,10 @@
 package io.subbu.ai.firedrill.services;
 
+import io.subbu.ai.firedrill.config.SecurityUtils;
 import io.subbu.ai.firedrill.entities.Candidate;
 import io.subbu.ai.firedrill.entities.CandidateMatch;
 import io.subbu.ai.firedrill.entities.JobRequirement;
+import io.subbu.ai.firedrill.entities.MatchAudit;
 import io.subbu.ai.firedrill.models.CandidateMatchRequest;
 import io.subbu.ai.firedrill.models.CandidateMatchResponse;
 import io.subbu.ai.firedrill.repos.CandidateMatchRepository;
@@ -30,6 +32,7 @@ public class CandidateMatchingService {
     private final JobRequirementRepository jobRequirementRepository;
     private final CandidateMatchRepository matchRepository;
     private final AIService aiService;
+    private final MatchAuditService matchAuditService;
 
     /**
      * Match a single candidate against a job requirement.
@@ -67,23 +70,36 @@ public class CandidateMatchingService {
         JobRequirement job = jobRequirementRepository.findById(jobRequirementId)
                 .orElseThrow(() -> new IllegalArgumentException("Job requirement not found: " + jobRequirementId));
 
+        String initiatedBy = SecurityUtils.getCurrentUsername().orElse("system");
+        MatchAudit audit = matchAuditService.createAudit(jobRequirementId, job.getTitle(), initiatedBy);
+        long startTime = System.currentTimeMillis();
+
         List<Candidate> allCandidates = candidateRepository.findAll();
         List<CandidateMatch> matches = new ArrayList<>();
 
-        for (Candidate candidate : allCandidates) {
-            try {
-                CandidateMatch match = matchRepository.findByCandidateIdAndJobRequirementId(
-                        candidate.getId(), jobRequirementId)
-                        .map(existingMatch -> updateMatch(existingMatch, candidate, job))
-                        .orElseGet(() -> createNewMatch(candidate, job));
-                matches.add(match);
-            } catch (Exception e) {
-                log.error("Error matching candidate {} to job {}", 
-                         candidate.getId(), jobRequirementId, e);
+        try {
+            for (Candidate candidate : allCandidates) {
+                try {
+                    CandidateMatch match = matchRepository.findByCandidateIdAndJobRequirementId(
+                            candidate.getId(), jobRequirementId)
+                            .map(existingMatch -> updateMatch(existingMatch, candidate, job))
+                            .orElseGet(() -> createNewMatch(candidate, job));
+                    matches.add(match);
+                } catch (Exception e) {
+                    log.error("Error matching candidate {} to job {}",
+                             candidate.getId(), jobRequirementId, e);
+                }
             }
+
+            log.info("Matched {} candidates to job {}", matches.size(), jobRequirementId);
+            long durationMs = System.currentTimeMillis() - startTime;
+            matchAuditService.completeAudit(audit.getId(), matches, durationMs);
+        } catch (Exception e) {
+            long durationMs = System.currentTimeMillis() - startTime;
+            matchAuditService.failAudit(audit.getId(), e.getMessage(), durationMs);
+            throw e;
         }
 
-        log.info("Matched {} candidates to job {}", matches.size(), jobRequirementId);
         return matches;
     }
 
