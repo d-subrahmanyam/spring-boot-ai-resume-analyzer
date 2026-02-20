@@ -139,6 +139,11 @@ public class AIService {
      * @return Formatted prompt
      */
     private String buildMatchingPrompt(CandidateMatchRequest request) {
+        String enrichedSection = "";
+        if (request.getEnrichedProfileContext() != null && !request.getEnrichedProfileContext().isBlank()) {
+            enrichedSection = "\nEXTERNAL PROFILE DATA (from GitHub/Internet):\n" + request.getEnrichedProfileContext() + "\n";
+        }
+
         return String.format("""
             You are an expert recruitment analyst. Match the following candidate against the job requirement.
             
@@ -148,7 +153,7 @@ public class AIService {
             - Domain Knowledge: %s
             - Academic Background: %s
             - Years of Experience: %d
-            
+            %s
             JOB REQUIREMENT:
             - Title: %s
             - Description: %s
@@ -170,13 +175,15 @@ public class AIService {
               "recommendation": "Strong Match|Good Match|Partial Match|No Match"
             }
             
-            Be objective and thorough. Respond ONLY with valid JSON.
+            Be objective and thorough. If external profile data is provided, use it to improve accuracy.
+            Respond ONLY with valid JSON.
             """,
             request.getExperienceSummary(),
             request.getSkills(),
             request.getDomainKnowledge(),
             request.getAcademicBackground(),
             request.getYearsOfExperience() != null ? request.getYearsOfExperience() : 0,
+            enrichedSection,
             request.getJobTitle(),
             request.getJobDescription(),
             request.getRequiredSkills(),

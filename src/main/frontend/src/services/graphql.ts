@@ -545,3 +545,73 @@ export const GET_RECENT_TRACKERS = `
     }
   }
 `
+
+// External Profile Enrichment Queries & Mutations
+export const GET_CANDIDATE_EXTERNAL_PROFILES = `
+  query GetCandidateExternalProfiles($candidateId: UUID!) {
+    candidateExternalProfiles(candidateId: $candidateId) {
+      id
+      source
+      profileUrl
+      displayName
+      bio
+      location
+      company
+      publicRepos
+      followers
+      repositories
+      enrichedSummary
+      status
+      errorMessage
+      lastFetchedAt
+      createdAt
+      updatedAt
+    }
+  }
+`
+
+export const ENRICH_CANDIDATE_PROFILE = `
+  mutation EnrichCandidateProfile($candidateId: UUID!, $source: ExternalProfileSource!) {
+    enrichCandidateProfile(candidateId: $candidateId, source: $source) {
+      id
+      source
+      profileUrl
+      displayName
+      bio
+      location
+      company
+      publicRepos
+      followers
+      repositories
+      enrichedSummary
+      status
+      errorMessage
+      lastFetchedAt
+      createdAt
+      updatedAt
+    }
+  }
+`
+
+export const REFRESH_CANDIDATE_PROFILE = `
+  mutation RefreshCandidateProfile($profileId: UUID!) {
+    refreshCandidateProfile(profileId: $profileId) {
+      id
+      source
+      profileUrl
+      displayName
+      bio
+      location
+      company
+      publicRepos
+      followers
+      repositories
+      enrichedSummary
+      status
+      errorMessage
+      lastFetchedAt
+      createdAt
+      updatedAt
+    }
+  }
+`

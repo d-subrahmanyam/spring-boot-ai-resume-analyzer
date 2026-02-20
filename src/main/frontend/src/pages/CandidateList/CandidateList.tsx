@@ -6,6 +6,13 @@ import {
   searchCandidatesBySkill,
   deleteCandidate,
 } from '@/store/slices/candidatesSlice'
+import {
+  fetchExternalProfiles,
+  enrichProfile,
+  refreshProfile,
+  type ExternalProfileSource,
+  type CandidateExternalProfile,
+} from '@/store/slices/enrichmentSlice'
 import { RootState } from '@/store'
 import FeedbackList from '@/components/FeedbackList/FeedbackList'
 import FeedbackForm from '@/components/FeedbackForm/FeedbackForm'
@@ -15,12 +22,16 @@ import styles from './CandidateList.module.css'
 const CandidateList = () => {
   const dispatch = useDispatch()
   const { candidates, loading } = useSelector((state: RootState) => state.candidates)
+  const { profilesByCandidateId, enrichingCandidateId } = useSelector(
+    (state: RootState) => state.enrichment
+  )
   const [searchType, setSearchType] = useState<'all' | 'name' | 'skill'>('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null)
   const [showFeedbackModal, setShowFeedbackModal] = useState(false)
   const [showFeedbackForm, setShowFeedbackForm] = useState(false)
   const [feedbackRefreshTrigger, setFeedbackRefreshTrigger] = useState(0)
+  const [expandedEnrichmentId, setExpandedEnrichmentId] = useState<string | null>(null)
 
   useEffect(() => {
     dispatch(fetchCandidates())
@@ -57,6 +68,48 @@ const CandidateList = () => {
   const handleFeedbackSuccess = () => {
     setShowFeedbackForm(false)
     setFeedbackRefreshTrigger((prev) => prev + 1)
+  }
+
+  const handleToggleEnrichment = (candidateId: string) => {
+    if (expandedEnrichmentId === candidateId) {
+      setExpandedEnrichmentId(null)
+      return
+    }
+    setExpandedEnrichmentId(candidateId)
+    // Fetch profiles if not loaded yet
+    if (!profilesByCandidateId[candidateId]) {
+      dispatch(fetchExternalProfiles(candidateId))
+    }
+  }
+
+  const handleEnrich = (candidateId: string, source: ExternalProfileSource) => {
+    dispatch(enrichProfile({ candidateId, source }))
+    if (expandedEnrichmentId !== candidateId) {
+      setExpandedEnrichmentId(candidateId)
+    }
+  }
+
+  const handleRefreshProfile = (profile: CandidateExternalProfile, candidateId: string) => {
+    dispatch(refreshProfile({ profileId: profile.id, candidateId }))
+  }
+
+  const getStatusBadgeClass = (status: string) => {
+    switch (status) {
+      case 'SUCCESS': return styles.statusSuccess
+      case 'PENDING': return styles.statusPending
+      case 'FAILED': return styles.statusFailed
+      case 'NOT_FOUND': return styles.statusNotFound
+      default: return styles.statusNotFound
+    }
+  }
+
+  const getSourceIcon = (source: ExternalProfileSource) => {
+    switch (source) {
+      case 'GITHUB': return '🐙'
+      case 'LINKEDIN': return '💼'
+      case 'INTERNET_SEARCH': return '🌐'
+      default: return '🔗'
+    }
   }
 
   return (
@@ -144,6 +197,16 @@ const CandidateList = () => {
                   💬 Feedback
                 </button>
                 <button
+                  className={styles.enrichButton}
+                  onClick={() => handleToggleEnrichment(candidate.id)}
+                  title="View / fetch external profile data"
+                >
+                  🔍 Profiles
+                  {profilesByCandidateId[candidate.id]?.some((p) => p.status === 'SUCCESS') && (
+                    <span className={styles.enrichedBadge}>✓</span>
+                  )}
+                </button>
+                <button
                   className={styles.deleteButton}
                   onClick={() => handleDelete(candidate.id)}
                 >
@@ -153,6 +216,138 @@ const CandidateList = () => {
                   {new Date(candidate.createdAt).toLocaleDateString()}
                 </span>
               </div>
+
+              {/* External Profile Enrichment Panel */}
+              {expandedEnrichmentId === candidate.id && (
+                <div className={styles.enrichmentPanel}>
+                  <div className={styles.enrichmentHeader}>
+                    <strong>🌐 External Profiles</strong>
+                    <div className={styles.enrichmentActions}>
+                      <button
+                        className={styles.enrichSourceBtn}
+                        onClick={() => handleEnrich(candidate.id, 'GITHUB')}
+                        disabled={enrichingCandidateId === candidate.id}
+                        title="Fetch from GitHub"
+                      >
+                        {enrichingCandidateId === candidate.id ? '⏳' : '🐙'} GitHub
+                      </button>
+                      <button
+                        className={styles.enrichSourceBtn}
+                        onClick={() => handleEnrich(candidate.id, 'INTERNET_SEARCH')}
+                        disabled={enrichingCandidateId === candidate.id}
+                        title="Aggregate from internet"
+                      >
+                        {enrichingCandidateId === candidate.id ? '⏳' : '🌐'} Web
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Loading state */}
+                  {enrichingCandidateId === candidate.id && (
+                    <p className={styles.enrichingText}>Fetching profile data…</p>
+                  )}
+
+                  {/* No profiles yet */}
+                  {!enrichingCandidateId &&
+                    (!profilesByCandidateId[candidate.id] ||
+                      profilesByCandidateId[candidate.id].length === 0) && (
+                      <p className={styles.noProfilesText}>
+                        No external profiles yet. Click a source button above to enrich this candidate's profile.
+                      </p>
+                    )}
+
+                  {/* Profile cards */}
+                  {(profilesByCandidateId[candidate.id] ?? []).map((profile) => (
+                    <div key={profile.id} className={styles.externalProfileCard}>
+                      <div className={styles.externalProfileHeader}>
+                        <span className={styles.sourceLabel}>
+                          {getSourceIcon(profile.source)} {profile.source.replace('_', ' ')}
+                        </span>
+                        <span className={`${styles.statusBadge} ${getStatusBadgeClass(profile.status)}`}>
+                          {profile.status}
+                        </span>
+                        <button
+                          className={styles.refreshProfileBtn}
+                          onClick={() => handleRefreshProfile(profile, candidate.id)}
+                          disabled={enrichingCandidateId === candidate.id}
+                          title="Refresh this profile"
+                        >
+                          🔄
+                        </button>
+                      </div>
+
+                      {profile.status === 'SUCCESS' && (
+                        <div className={styles.externalProfileBody}>
+                          {profile.profileUrl && (
+                            <div className={styles.profileField}>
+                              <strong>Profile:</strong>{' '}
+                              <a
+                                href={profile.profileUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className={styles.profileLink}
+                              >
+                                {profile.profileUrl}
+                              </a>
+                            </div>
+                          )}
+                          {profile.displayName && (
+                            <div className={styles.profileField}>
+                              <strong>Name:</strong> {profile.displayName}
+                            </div>
+                          )}
+                          {profile.bio && (
+                            <div className={styles.profileField}>
+                              <strong>Bio:</strong> {profile.bio}
+                            </div>
+                          )}
+                          {profile.location && (
+                            <div className={styles.profileField}>
+                              <strong>Location:</strong> {profile.location}
+                            </div>
+                          )}
+                          {profile.company && (
+                            <div className={styles.profileField}>
+                              <strong>Company:</strong> {profile.company}
+                            </div>
+                          )}
+                          {profile.source === 'GITHUB' && profile.publicRepos !== null && (
+                            <div className={styles.profileStats}>
+                              <span title="Public repositories">📦 {profile.publicRepos} repos</span>
+                              {profile.followers !== null && (
+                                <span title="Followers">👥 {profile.followers} followers</span>
+                              )}
+                            </div>
+                          )}
+                          {profile.repositories && (
+                            <div className={styles.profileField}>
+                              <strong>Notable Projects:</strong>
+                              <p className={styles.repoList}>{profile.repositories}</p>
+                            </div>
+                          )}
+                          {profile.lastFetchedAt && (
+                            <div className={styles.lastUpdated}>
+                              Last updated: {new Date(profile.lastFetchedAt).toLocaleString()}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {(profile.status === 'FAILED' || profile.status === 'NOT_AVAILABLE') && (
+                        <p className={styles.errorText}>
+                          {profile.errorMessage ?? 'Enrichment failed.'}
+                        </p>
+                      )}
+
+                      {profile.status === 'NOT_FOUND' && (
+                        <p className={styles.notFoundText}>
+                          No matching profile found on {profile.source.replace('_', ' ')}.
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           ))}
         </div>

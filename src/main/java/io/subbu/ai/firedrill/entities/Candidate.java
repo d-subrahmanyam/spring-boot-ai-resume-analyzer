@@ -136,4 +136,10 @@ public class Candidate {
      */
     @OneToMany(mappedBy = "candidate", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<CandidateMatch> matches;
+
+    /**
+     * One-to-many relationship with external profile enrichments
+     */
+    @OneToMany(mappedBy = "candidate", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<CandidateExternalProfile> externalProfiles;
 }

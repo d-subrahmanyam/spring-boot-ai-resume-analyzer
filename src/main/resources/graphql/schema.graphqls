@@ -36,6 +36,12 @@ enum EmployeeStatus {
     TERMINATED
 }
 
+enum ExternalProfileSource {
+    GITHUB
+    LINKEDIN
+    INTERNET_SEARCH
+}
+
 enum FeedbackType {
     SHORTLIST
     REJECT
@@ -83,6 +89,26 @@ type Candidate {
     createdAt: LocalDateTime!
     updatedAt: LocalDateTime!
     matches: [CandidateMatch!]
+    externalProfiles: [CandidateExternalProfile!]
+}
+
+type CandidateExternalProfile {
+    id: UUID!
+    source: ExternalProfileSource!
+    profileUrl: String
+    displayName: String
+    bio: String
+    location: String
+    company: String
+    publicRepos: Int
+    followers: Int
+    repositories: String
+    enrichedSummary: String
+    status: String!
+    errorMessage: String
+    lastFetchedAt: LocalDateTime
+    createdAt: LocalDateTime!
+    updatedAt: LocalDateTime!
 }
 
 type JobRequirement {
@@ -425,6 +451,9 @@ type Query {
     matchAudits(limit: Int): [MatchAudit!]!
     matchAuditsForJob(jobRequirementId: UUID!): [MatchAudit!]!
     activeMatchRuns: [MatchAudit!]!
+
+    # External profile enrichment queries
+    candidateExternalProfiles(candidateId: UUID!): [CandidateExternalProfile!]!
 }
 
 # Mutations
@@ -502,6 +531,10 @@ type Mutation {
     # System health mutations
     checkServiceHealth(serviceName: String!): SystemHealth!
     resetFailureCount(serviceName: String!): SystemHealth!
+
+    # External profile enrichment mutations
+    enrichCandidateProfile(candidateId: UUID!, source: ExternalProfileSource!): CandidateExternalProfile!
+    refreshCandidateProfile(profileId: UUID!): CandidateExternalProfile!
 }
 
 # Schema

@@ -33,6 +33,7 @@ public class CandidateMatchingService {
     private final CandidateMatchRepository matchRepository;
     private final AIService aiService;
     private final MatchAuditService matchAuditService;
+    private final CandidateProfileEnrichmentService enrichmentService;
 
     /**
      * Match a single candidate against a job requirement.
@@ -196,6 +197,14 @@ public class CandidateMatchingService {
      * @return AI matching response
      */
     private CandidateMatchResponse performAIMatching(Candidate candidate, JobRequirement job) {
+        // Include enriched profile context if available
+        String enrichedContext = null;
+        try {
+            enrichedContext = enrichmentService.buildEnrichmentContext(candidate.getId());
+        } catch (Exception e) {
+            log.warn("Could not load enrichment context for candidate {}: {}", candidate.getId(), e.getMessage());
+        }
+
         CandidateMatchRequest matchRequest = CandidateMatchRequest.builder()
                 .experienceSummary(candidate.getExperienceSummary())
                 .skills(candidate.getSkills())
@@ -209,6 +218,7 @@ public class CandidateMatchingService {
                 .domainRequirements(job.getDomainRequirements())
                 .minExperienceYears(job.getMinExperienceYears())
                 .maxExperienceYears(job.getMaxExperienceYears())
+                .enrichedProfileContext(enrichedContext)
                 .build();
 
         return aiService.matchCandidate(matchRequest);

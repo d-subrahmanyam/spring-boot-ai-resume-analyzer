@@ -74,4 +74,10 @@ public class CandidateMatchRequest {
      * Maximum experience years required
      */
     private Integer maxExperienceYears;
+
+    /**
+     * Additional context from external profile enrichment (GitHub, LinkedIn, etc.).
+     * Included when available to improve match accuracy.
+     */
+    private String enrichedProfileContext;
 }

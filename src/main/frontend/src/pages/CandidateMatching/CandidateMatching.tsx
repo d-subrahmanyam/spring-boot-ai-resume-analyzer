@@ -7,6 +7,7 @@ import {
   matchAllCandidatesToJob,
   updateMatchStatus,
 } from '@/store/slices/matchesSlice'
+import { fetchExternalProfiles } from '@/store/slices/enrichmentSlice'
 import { RootState } from '@/store'
 import styles from './CandidateMatching.module.css'
 
@@ -15,6 +16,7 @@ const CandidateMatching = () => {
   const { candidates } = useSelector((state: RootState) => state.candidates)
   const { jobs } = useSelector((state: RootState) => state.jobs)
   const { matches, matchingInProgress, error } = useSelector((state: RootState) => state.matches)
+  const { profilesByCandidateId } = useSelector((state: RootState) => state.enrichment)
   const [selectedJobId, setSelectedJobId] = useState<string>('')
   const [alreadyMatchingWarning, setAlreadyMatchingWarning] = useState(false)
 
@@ -28,6 +30,19 @@ const CandidateMatching = () => {
       dispatch(fetchMatchesForJob({ jobId: selectedJobId, limit: 50 }))
     }
   }, [selectedJobId, dispatch])
+
+  // When matches load, pre-fetch external profiles for matched candidates
+  useEffect(() => {
+    if (matches.length > 0) {
+      const uniqueCandidateIds = [...new Set(matches.map((m) => m.candidateId))]
+      uniqueCandidateIds.forEach((candidateId) => {
+        if (candidateId && !profilesByCandidateId[candidateId]) {
+          dispatch(fetchExternalProfiles(candidateId))
+        }
+      })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matches.length, dispatch])
 
   // Block browser tab close / page reload while matching is in progress
   useEffect(() => {
@@ -177,6 +192,24 @@ const CandidateMatching = () => {
                 <div>
                   <h4>{match.candidate?.name || 'Unknown Candidate'}</h4>
                   <span className={styles.email}>{match.candidate?.email}</span>
+                  {/* External profile badges */}
+                  <div className={styles.profileBadges}>
+                    {(profilesByCandidateId[match.candidateId] ?? [])
+                      .filter((p) => p.status === 'SUCCESS' && p.profileUrl)
+                      .map((p) => (
+                        <a
+                          key={p.id}
+                          href={p.profileUrl!}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={styles.profileBadge}
+                          title={`View ${p.source} profile`}
+                        >
+                          {p.source === 'GITHUB' ? '🐙' : p.source === 'LINKEDIN' ? '💼' : '🌐'}{' '}
+                          {p.source === 'GITHUB' ? 'GitHub' : p.source.replace('_', ' ')}
+                        </a>
+                      ))}
+                  </div>
                 </div>
                 <div className={`${styles.score} ${getScoreColor(match.matchScore)}`}>
                   {match.matchScore}%

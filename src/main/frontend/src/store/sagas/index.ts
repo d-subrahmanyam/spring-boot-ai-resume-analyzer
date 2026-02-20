@@ -15,17 +15,22 @@ import { gqlRequestWithRefresh,
   MATCH_ALL_CANDIDATES_TO_JOB,
   UPDATE_MATCH_STATUS,
   GET_RECENT_TRACKERS,
+  GET_CANDIDATE_EXTERNAL_PROFILES,
+  ENRICH_CANDIDATE_PROFILE,
+  REFRESH_CANDIDATE_PROFILE,
 } from '@services/graphql'
 import { uploadResumes, getProcessStatus } from '@services/api'
 import * as candidatesActions from '@store/slices/candidatesSlice'
 import * as jobsActions from '@store/slices/jobsSlice'
 import * as matchesActions from '@store/slices/matchesSlice'
 import * as uploadActions from '@store/slices/uploadSlice'
+import * as enrichmentActions from '@store/slices/enrichmentSlice'
 import { authSagas } from './authSagas'
 import type { Candidate } from '@store/slices/candidatesSlice'
 import type { JobRequirement } from '@store/slices/jobsSlice'
 import type { CandidateMatch } from '@store/slices/matchesSlice'
 import type { ProcessTracker } from '@store/slices/uploadSlice'
+import type { CandidateExternalProfile, ExternalProfileSource } from '@store/slices/enrichmentSlice'
 
 // Helper to call graphql client with automatic token refresh on UNAUTHORIZED
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -252,6 +257,55 @@ function* fetchRecentTrackersSaga(action: PayloadAction<number>) {
   }
 }
 
+// Enrichment Sagas
+function* fetchExternalProfilesSaga(action: PayloadAction<string>) {
+  try {
+    const data: { candidateExternalProfiles: CandidateExternalProfile[] } = yield call(
+      gqlRequest,
+      GET_CANDIDATE_EXTERNAL_PROFILES,
+      { candidateId: action.payload }
+    )
+    yield put(enrichmentActions.fetchExternalProfilesSuccess({
+      candidateId: action.payload,
+      profiles: data.candidateExternalProfiles,
+    }))
+  } catch (error: any) {
+    yield put(enrichmentActions.fetchExternalProfilesFailure(error.message))
+  }
+}
+
+function* enrichProfileSaga(action: PayloadAction<{ candidateId: string; source: ExternalProfileSource }>) {
+  try {
+    const data: { enrichCandidateProfile: CandidateExternalProfile } = yield call(
+      gqlRequest,
+      ENRICH_CANDIDATE_PROFILE,
+      { candidateId: action.payload.candidateId, source: action.payload.source }
+    )
+    yield put(enrichmentActions.enrichProfileSuccess({
+      candidateId: action.payload.candidateId,
+      profile: data.enrichCandidateProfile,
+    }))
+  } catch (error: any) {
+    yield put(enrichmentActions.enrichProfileFailure(error.message))
+  }
+}
+
+function* refreshProfileSaga(action: PayloadAction<{ profileId: string; candidateId: string }>) {
+  try {
+    const data: { refreshCandidateProfile: CandidateExternalProfile } = yield call(
+      gqlRequest,
+      REFRESH_CANDIDATE_PROFILE,
+      { profileId: action.payload.profileId }
+    )
+    yield put(enrichmentActions.refreshProfileSuccess({
+      candidateId: action.payload.candidateId,
+      profile: data.refreshCandidateProfile,
+    }))
+  } catch (error: any) {
+    yield put(enrichmentActions.refreshProfileFailure(error.message))
+  }
+}
+
 // Root Saga
 export default function* rootSaga() {
   yield all([
@@ -272,5 +326,9 @@ export default function* rootSaga() {
     takeEvery(uploadActions.uploadFiles.type, uploadFilesSaga),
     takeEvery(uploadActions.fetchProcessStatus.type, fetchProcessStatusSaga),
     takeLatest(uploadActions.fetchRecentTrackers.type, fetchRecentTrackersSaga),
+    // Enrichment sagas
+    takeEvery(enrichmentActions.fetchExternalProfiles.type, fetchExternalProfilesSaga),
+    takeEvery(enrichmentActions.enrichProfile.type, enrichProfileSaga),
+    takeEvery(enrichmentActions.refreshProfile.type, refreshProfileSaga),
   ])
 }

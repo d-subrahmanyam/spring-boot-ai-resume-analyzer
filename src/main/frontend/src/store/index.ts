@@ -5,6 +5,7 @@ import candidatesReducer from './slices/candidatesSlice'
 import jobsReducer from './slices/jobsSlice'
 import matchesReducer from './slices/matchesSlice'
 import uploadReducer from './slices/uploadSlice'
+import enrichmentReducer from './slices/enrichmentSlice'
 import rootSaga from './sagas'
 
 const sagaMiddleware = createSagaMiddleware()
@@ -16,6 +17,7 @@ export const store = configureStore({
     jobs: jobsReducer,
     matches: matchesReducer,
     upload: uploadReducer,
+    enrichment: enrichmentReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({ thunk: false }).concat(sagaMiddleware),
