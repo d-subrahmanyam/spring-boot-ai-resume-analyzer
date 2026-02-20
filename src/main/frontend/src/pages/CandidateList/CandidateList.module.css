@@ -167,11 +167,16 @@
   background: #7c3aed;
   color: white;
   border: none;
-  padding: 0.5rem 1rem;
-  border-radius: 4px;
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
   cursor: pointer;
-  font-size: 0.875rem;
+  font-size: 1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   transition: background 0.2s;
+  flex-shrink: 0;
 }
 
 .feedbackButton:hover {
@@ -182,11 +187,16 @@
   background: #fc8181;
   color: white;
   border: none;
-  padding: 0.5rem 1rem;
-  border-radius: 4px;
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
   cursor: pointer;
-  font-size: 0.875rem;
+  font-size: 1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   transition: background 0.2s;
+  flex-shrink: 0;
 }
 
 .deleteButton:hover {
@@ -323,13 +333,17 @@
   background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
   color: white;
   border: none;
-  padding: 0.5rem 1rem;
+  width: 36px;
+  height: 36px;
   border-radius: 6px;
-  font-size: 0.85rem;
-  font-weight: 500;
+  font-size: 1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
   transition: opacity 0.2s;
   position: relative;
+  flex-shrink: 0;
 }
 
 .enrichButton:hover {

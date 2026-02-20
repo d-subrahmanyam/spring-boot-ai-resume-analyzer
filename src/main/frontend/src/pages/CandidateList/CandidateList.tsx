@@ -193,15 +193,16 @@ const CandidateList = () => {
                 <button
                   className={styles.feedbackButton}
                   onClick={() => handleOpenFeedback(candidate.id)}
+                  title="Feedback"
                 >
-                  💬 Feedback
+                  💬
                 </button>
                 <button
                   className={styles.enrichButton}
                   onClick={() => handleToggleEnrichment(candidate.id)}
-                  title="View / fetch external profile data"
+                  title="External Profiles"
                 >
-                  🔍 Profiles
+                  🔍
                   {profilesByCandidateId[candidate.id]?.some((p) => p.status === 'SUCCESS') && (
                     <span className={styles.enrichedBadge}>✓</span>
                   )}
@@ -209,8 +210,9 @@ const CandidateList = () => {
                 <button
                   className={styles.deleteButton}
                   onClick={() => handleDelete(candidate.id)}
+                  title="Delete candidate"
                 >
-                  Delete
+                  🗑️
                 </button>
                 <span className={styles.date}>
                   {new Date(candidate.createdAt).toLocaleDateString()}
