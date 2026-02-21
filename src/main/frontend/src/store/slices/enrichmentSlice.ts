@@ -1,6 +1,6 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit'
 
-export type ExternalProfileSource = 'GITHUB' | 'LINKEDIN' | 'INTERNET_SEARCH'
+export type ExternalProfileSource = 'GITHUB' | 'LINKEDIN' | 'TWITTER' | 'INTERNET_SEARCH'
 export type EnrichmentStatus = 'PENDING' | 'SUCCESS' | 'FAILED' | 'NOT_FOUND' | 'NOT_AVAILABLE'
 
 export interface CandidateExternalProfile {
@@ -108,6 +108,32 @@ const enrichmentSlice = createSlice({
       state.enrichingCandidateId = null
       state.error = action.payload
     },
+    enrichFromUrl: (
+      state,
+      _action: PayloadAction<{ candidateId: string; profileUrl: string }>
+    ) => {
+      state.enrichingCandidateId = _action.payload.candidateId
+      state.error = null
+    },
+    enrichFromUrlSuccess: (
+      state,
+      action: PayloadAction<{ candidateId: string; profile: CandidateExternalProfile }>
+    ) => {
+      const { candidateId, profile } = action.payload
+      const existing = state.profilesByCandidateId[candidateId] ?? []
+      const idx = existing.findIndex((p) => p.id === profile.id)
+      if (idx !== -1) {
+        existing[idx] = profile
+      } else {
+        existing.push(profile)
+      }
+      state.profilesByCandidateId[candidateId] = existing
+      state.enrichingCandidateId = null
+    },
+    enrichFromUrlFailure: (state, action: PayloadAction<string>) => {
+      state.enrichingCandidateId = null
+      state.error = action.payload
+    },
   },
 })
 
@@ -121,6 +147,9 @@ export const {
   refreshProfile,
   refreshProfileSuccess,
   refreshProfileFailure,
+  enrichFromUrl,
+  enrichFromUrlSuccess,
+  enrichFromUrlFailure,
 } = enrichmentSlice.actions
 
 export default enrichmentSlice.reducer

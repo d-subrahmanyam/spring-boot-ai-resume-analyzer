@@ -28,7 +28,20 @@
         <frontend.maven.plugin.version>1.15.0</frontend.maven.plugin.version>
         <node.version>v20.11.0</node.version>
         <yarn.version>v1.22.19</yarn.version>
+        <spring-ai.version>1.0.0-M6</spring-ai.version>
     </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.springframework.ai</groupId>
+                <artifactId>spring-ai-bom</artifactId>
+                <version>${spring-ai.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
     
     <dependencies>
         <!-- Spring Boot Starters -->
@@ -78,11 +91,10 @@
             <version>0.1.4</version>
         </dependency>
         
-        <!-- Spring AI -->
+        <!-- Spring AI (version managed by spring-ai-bom) -->
         <dependency>
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-openai-spring-boot-starter</artifactId>
-            <version>1.0.0-M4</version>
         </dependency>
         
         <!-- Apache POI for Word Documents -->
@@ -157,7 +169,13 @@
             <artifactId>hypersistence-utils-hibernate-63</artifactId>
             <version>3.7.3</version>
         </dependency>
-        
+
+        <!-- Jackson Databind — used by enrichers to parse REST API responses -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+
         <!-- Test Dependencies -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -327,14 +345,4 @@
         </plugins>
     </build>
     
-    <repositories>
-        <repository>
-            <id>spring-milestones</id>
-            <name>Spring Milestones</name>
-            <url>https://repo.spring.io/milestone</url>
-            <snapshots>
-                <enabled>false</enabled>
-            </snapshots>
-        </repository>
-    </repositories>
 </project>

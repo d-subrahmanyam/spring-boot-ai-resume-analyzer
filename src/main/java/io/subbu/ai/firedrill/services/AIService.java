@@ -1,213 +1,88 @@
 package io.subbu.ai.firedrill.services;
 
-import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.subbu.ai.firedrill.config.AiPromptsProperties;
+import io.subbu.ai.firedrill.entities.Candidate;
+import io.subbu.ai.firedrill.entities.ExternalProfileSource;
+import io.subbu.ai.firedrill.entities.JobRequirement;
+import io.subbu.ai.firedrill.exceptions.LlmServiceException;
 import io.subbu.ai.firedrill.models.*;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.*;
+import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
 
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
- * Service for AI/LLM interactions using direct HTTP calls to the LLM Studio API.
- * Bypasses Spring AI ChatClient to avoid compatibility issues with local LLM servers.
+ * Service for AI/LLM interactions using the Spring AI {@link ChatClient}.
+ *
+ * <p>Prompt templates are externalised in {@code ai-prompts.yml} and injected via
+ * {@link AiPromptsProperties}, so prompts can be updated without touching Java source code.</p>
+ *
+ * <p>All LLM calls request a structured JSON response. Jackson ({@link ObjectMapper})
+ * deserialises the JSON into strongly-typed Java objects, keeping the rest of the codebase
+ * free of raw JSON string manipulation.</p>
+ *
+ * <p>Error-handling strategy:
+ * <ul>
+ *   <li>Network / API failures are caught and wrapped in {@link LlmServiceException}.</li>
+ *   <li>JSON parse failures fall back to a safe default response so the caller can
+ *       continue without crashing the upload / match pipeline.</li>
+ *   <li>All errors are logged with enough context for operational debugging.</li>
+ * </ul>
+ * </p>
  */
 @Service
 @Slf4j
 public class AIService {
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final ChatClient chatClient;
+    private final ObjectMapper objectMapper;
+    private final AiPromptsProperties prompts;
 
-    @Value("${spring.ai.openai.base-url:http://localhost:1234/v1}")
-    private String llmBaseUrl;
-
-    @Value("${spring.ai.openai.chat.options.model:mistralai/mistral-7b-instruct-v0.3}")
-    private String chatModel;
-
-    /**
-     * Call the LLM API directly via HTTP.
-     */
-    private String callLlm(String prompt) {
-        try {
-            String url = llmBaseUrl + "/chat/completions";
-            
-            Map<String, Object> requestBody = Map.of(
-                "model", chatModel,
-                "messages", List.of(Map.of("role", "user", "content", prompt)),
-                "max_tokens", 3000,
-                "temperature", 0.3
-            );
-            
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            
-            HttpEntity<Map<String, Object>> request = new HttpEntity<>(requestBody, headers);
-            ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.POST, request, String.class);
-            
-            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
-                JsonNode root = objectMapper.readTree(response.getBody());
-                JsonNode choices = root.path("choices");
-                if (choices.isArray() && choices.size() > 0) {
-                    JsonNode content = choices.get(0).path("message").path("content");
-                    if (!content.isMissingNode() && !content.isNull()) {
-                        return content.asText();
-                    }
-                }
-            }
-        } catch (Exception e) {
-            log.error("Error calling LLM API: {}", e.getMessage());
-        }
-        return null;
+    public AIService(ChatClient.Builder chatClientBuilder,
+                     ObjectMapper objectMapper,
+                     AiPromptsProperties prompts) {
+        // Build a default ChatClient; per-call options (temperature, max-tokens) are
+        // applied inline so that each LLM task uses its own tuning parameters.
+        this.chatClient = chatClientBuilder.build();
+        this.objectMapper = objectMapper;
+        this.prompts = prompts;
     }
 
+    // -------------------------------------------------------------------------
+    // Public API
+    // -------------------------------------------------------------------------
+
     /**
-     * Analyze resume content using AI to extract candidate information.
-     * 
-     * @param request Resume analysis request
-     * @return Analysis response with extracted information
+     * Analyse resume content using the LLM to extract candidate information.
+     *
+     * @param request Resume analysis request containing file name and raw text.
+     * @return Populated {@link ResumeAnalysisResponse}; a safe fallback is returned
+     *         when the LLM is unavailable or returns unparseable content.
      */
     public ResumeAnalysisResponse analyzeResume(ResumeAnalysisRequest request) {
-        log.info("Analyzing resume: {}", request.getFilename());
-
-        String prompt = buildResumeAnalysisPrompt(request.getResumeContent());
-        String response = callLlm(prompt);
-        log.info("AI Response length: {}", response != null ? response.length() : "null");
-
-        return parseResumeAnalysisResponse(response);
-    }
-
-    /**
-     * Generate matching scores between a candidate and job requirement using AI.
-     * 
-     * @param request Candidate match request
-     * @return Match response with scores and explanations
-     */
-    public CandidateMatchResponse matchCandidate(CandidateMatchRequest request) {
-        log.info("Matching candidate for job: {}", request.getJobTitle());
-
-        String prompt = buildMatchingPrompt(request);
-        String response = callLlm(prompt);
-        log.debug("AI Matching Response: {}", response);
-
-        return parseMatchingResponse(response);
-    }
-
-    /**
-     * Build prompt for resume analysis.
-     * 
-     * @param resumeContent Resume text
-     * @return Formatted prompt
-     */
-    private String buildResumeAnalysisPrompt(String resumeContent) {
-        return String.format("""
-            You are an expert HR analyst. Analyze the following resume and extract key information.
-            
-            Resume Content:
-            %s
-            
-            Please provide a JSON response with the following structure:
-            {
-              "name": "Candidate's full name",
-              "email": "Email address",
-              "mobile": "Phone number",
-              "experienceSummary": "Brief summary of work experience (2-3 sentences)",
-              "skills": "MUST be a plain string with comma-separated values e.g. Java, Spring Boot, AWS",
-              "domainKnowledge": "MUST be a plain string with comma-separated domains e.g. Fintech, Cloud",
-              "academicBackground": "Education qualifications as a plain string summary",
-              "yearsOfExperience": <number>,
-              "confidenceScore": <0-1 decimal>
-            }
-            
-            IMPORTANT: skills, domainKnowledge, and academicBackground MUST be plain strings, NOT JSON arrays.
-            Extract information accurately. If a field is not found, use null or empty string.
-            For yearsOfExperience, calculate based on employment history.
-            For confidenceScore, rate your confidence in the extraction (0.0-1.0).
-            
-            Respond ONLY with valid JSON, no additional text.
-            """, resumeContent);
-    }
-
-    /**
-     * Build prompt for candidate matching.
-     * 
-     * @param request Match request
-     * @return Formatted prompt
-     */
-    private String buildMatchingPrompt(CandidateMatchRequest request) {
-        String enrichedSection = "";
-        if (request.getEnrichedProfileContext() != null && !request.getEnrichedProfileContext().isBlank()) {
-            enrichedSection = "\nEXTERNAL PROFILE DATA (from GitHub/Internet):\n" + request.getEnrichedProfileContext() + "\n";
-        }
-
-        return String.format("""
-            You are an expert recruitment analyst. Match the following candidate against the job requirement.
-            
-            CANDIDATE PROFILE:
-            - Experience Summary: %s
-            - Skills: %s
-            - Domain Knowledge: %s
-            - Academic Background: %s
-            - Years of Experience: %d
-            %s
-            JOB REQUIREMENT:
-            - Title: %s
-            - Description: %s
-            - Required Skills: %s
-            - Required Education: %s
-            - Domain Requirements: %s
-            - Experience Range: %d - %d years
-            
-            Provide a detailed matching analysis in JSON format:
-            {
-              "matchScore": <0-100>,
-              "skillsScore": <0-100>,
-              "experienceScore": <0-100>,
-              "educationScore": <0-100>,
-              "domainScore": <0-100>,
-              "explanation": "Overall match explanation",
-              "strengths": "Key strengths of candidate for this role",
-              "gaps": "Missing qualifications or skills",
-              "recommendation": "Strong Match|Good Match|Partial Match|No Match"
-            }
-            
-            Be objective and thorough. If external profile data is provided, use it to improve accuracy.
-            Respond ONLY with valid JSON.
-            """,
-            request.getExperienceSummary(),
-            request.getSkills(),
-            request.getDomainKnowledge(),
-            request.getAcademicBackground(),
-            request.getYearsOfExperience() != null ? request.getYearsOfExperience() : 0,
-            enrichedSection,
-            request.getJobTitle(),
-            request.getJobDescription(),
-            request.getRequiredSkills(),
-            request.getRequiredEducation(),
-            request.getDomainRequirements(),
-            request.getMinExperienceYears() != null ? request.getMinExperienceYears() : 0,
-            request.getMaxExperienceYears() != null ? request.getMaxExperienceYears() : 100
-        );
-    }
-
-    /**
-     * Parse AI response for resume analysis.
-     * 
-     * @param aiResponse Raw AI response
-     * @return Parsed analysis response
-     */
-    private ResumeAnalysisResponse parseResumeAnalysisResponse(String aiResponse) {
+        log.info("Analysing resume: {}", request.getFilename());
         try {
-            // Extract JSON from response (sometimes AI adds extra text)
-            String jsonResponse = extractJson(aiResponse);
-            return objectMapper.readValue(jsonResponse, ResumeAnalysisResponse.class);
-        } catch (Exception e) {
-            log.error("Failed to parse AI response: {}", aiResponse, e);
-            // Return a default response with minimal info
+            String userPrompt = prompts.getResumeAnalysis().render(
+                    "resumeContent", request.getResumeContent()
+            );
+
+            String rawResponse = callLlm(
+                    prompts.getResumeAnalysis().getSystem(),
+                    userPrompt,
+                    /* temperature */ 0.3f,
+                    /* maxTokens  */ 3000
+            );
+
+            log.info("LLM resume-analysis response length: {}", rawResponse != null ? rawResponse.length() : "null");
+            return parseResumeAnalysisResponse(rawResponse);
+        } catch (LlmServiceException e) {
+            log.warn("LLM unavailable during resume analysis — returning fallback. Reason: {}", e.getMessage());
             return ResumeAnalysisResponse.builder()
                     .name("Unknown")
                     .email("")
@@ -223,43 +98,265 @@ public class AIService {
     }
 
     /**
-     * Parse AI response for matching.
-     * 
-     * @param aiResponse Raw AI response
-     * @return Parsed matching response
+     * Generate a match score between a candidate and a job requirement using the LLM.
+     *
+     * @param request Candidate vs. job match request.
+     * @return Populated {@link CandidateMatchResponse}; a safe fallback is returned
+     *         when the LLM is unavailable or returns unparseable content.
      */
-    private CandidateMatchResponse parseMatchingResponse(String aiResponse) {
+    public CandidateMatchResponse matchCandidate(CandidateMatchRequest request) {
+        log.info("Matching candidate for job: {}", request.getJobTitle());
         try {
-            String jsonResponse = extractJson(aiResponse);
-            return objectMapper.readValue(jsonResponse, CandidateMatchResponse.class);
-        } catch (Exception e) {
-            log.error("Failed to parse matching response: {}", aiResponse, e);
+            String enrichedSection = buildEnrichedSection(request.getEnrichedProfileContext());
+
+            String userPrompt = prompts.getCandidateMatching().render(
+                    "experienceSummary",  nullSafe(request.getExperienceSummary()),
+                    "skills",             nullSafe(request.getSkills()),
+                    "domainKnowledge",    nullSafe(request.getDomainKnowledge()),
+                    "academicBackground", nullSafe(request.getAcademicBackground()),
+                    "yearsOfExperience",  String.valueOf(request.getYearsOfExperience() != null ? request.getYearsOfExperience() : 0),
+                    "enrichedSection",    enrichedSection,
+                    "jobTitle",           nullSafe(request.getJobTitle()),
+                    "jobDescription",     nullSafe(request.getJobDescription()),
+                    "requiredSkills",     nullSafe(request.getRequiredSkills()),
+                    "requiredEducation",  nullSafe(request.getRequiredEducation()),
+                    "domainRequirements", nullSafe(request.getDomainRequirements()),
+                    "minExperience",      String.valueOf(request.getMinExperienceYears() != null ? request.getMinExperienceYears() : 0),
+                    "maxExperience",      String.valueOf(request.getMaxExperienceYears() != null ? request.getMaxExperienceYears() : 100)
+            );
+
+            String rawResponse = callLlm(
+                    prompts.getCandidateMatching().getSystem(),
+                    userPrompt,
+                    /* temperature */ 0.2f,
+                    /* maxTokens  */ 2000
+            );
+
+            log.debug("LLM candidate-matching raw response: {}", rawResponse);
+            return parseMatchingResponse(rawResponse);
+        } catch (LlmServiceException e) {
+            log.warn("LLM unavailable during candidate matching — returning fallback. Reason: {}", e.getMessage());
             return CandidateMatchResponse.builder()
                     .matchScore(0.0)
+                    .skillsScore(0.0)
+                    .experienceScore(0.0)
+                    .educationScore(0.0)
+                    .domainScore(0.0)
+                    .explanation("AI matching temporarily unavailable — please retry shortly.")
+                    .strengths("")
+                    .gaps("")
                     .recommendation("Error in Analysis")
                     .build();
         }
     }
 
+    // -------------------------------------------------------------------------
+    // Agentic source selection
+    // -------------------------------------------------------------------------
+
     /**
-     * Extract JSON content from AI response.
-     * Handles cases where AI adds extra text around JSON.
-     * 
-     * @param response AI response
-     * @return Extracted JSON string
+     * Uses the LLM to decide which external data sources are most relevant for
+     * the given candidate+job combination before a match request is processed.
+     *
+     * <p>This is the agentic decision-making step. The LLM reasons about the job
+     * requirements and candidate profile to recommend which sources (GitHub, LinkedIn,
+     * Twitter, INTERNET_SEARCH) to fetch before scoring begins.</p>
+     *
+     * <p>Falls back to {@code [INTERNET_SEARCH]} on any failure so the pipeline
+     * is never blocked by an LLM error.</p>
+     *
+     * @param candidate the candidate being evaluated
+     * @param job       the target job requirement
+     * @return ordered list of recommended {@link ExternalProfileSource} values
+     */
+    @SuppressWarnings("unchecked")
+    public List<ExternalProfileSource> selectEnrichmentSources(Candidate candidate, JobRequirement job) {
+        log.info("[SOURCE-SELECT] Selecting enrichment sources for {} vs job '{}'",
+                candidate.getName(), job.getTitle());
+        try {
+            String userPrompt = prompts.getSourceSelection().render(
+                    "candidateSkills",   nullSafe(candidate.getSkills()),
+                    "experienceSummary", nullSafe(candidate.getExperienceSummary()),
+                    "yearsOfExperience", String.valueOf(candidate.getYearsOfExperience() != null ? candidate.getYearsOfExperience() : 0),
+                    "jobTitle",          nullSafe(job.getTitle()),
+                    "requiredSkills",    nullSafe(job.getRequiredSkills()),
+                    "jobDescription",    nullSafe(job.getDescription())
+            );
+
+            String rawResponse = callLlm(
+                    prompts.getSourceSelection().getSystem(),
+                    userPrompt,
+                    /* temperature */ 0.1f,
+                    /* maxTokens  */ 300
+            );
+
+            String json = extractJson(rawResponse);
+            Map<String, Object> parsed = objectMapper.readValue(json, new TypeReference<>() {});
+            List<String> sourceNames = (List<String>) parsed.getOrDefault("sources", List.of("INTERNET_SEARCH"));
+            String reasoning = (String) parsed.getOrDefault("reasoning", "");
+            log.info("[SOURCE-SELECT] Recommended {} for {}: {}", sourceNames, candidate.getName(), reasoning);
+
+            return sourceNames.stream()
+                    .map(name -> {
+                        try { return ExternalProfileSource.valueOf(name); }
+                        catch (IllegalArgumentException e) { return null; }
+                    })
+                    .filter(s -> s != null)
+                    .collect(Collectors.toList());
+
+        } catch (Exception e) {
+            log.warn("[SOURCE-SELECT] Failed ({}); defaulting to INTERNET_SEARCH", e.getMessage());
+            return List.of(ExternalProfileSource.INTERNET_SEARCH);
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Private helpers — LLM communication
+    // -------------------------------------------------------------------------
+
+    /**
+     * Calls the configured LLM with the given system and user messages.
+     *
+     * <p>Per-call {@link OpenAiChatOptions} allow each task to use its own
+     * temperature / token budget without altering global application configuration.</p>
+     *
+     * @param systemMessage Persona / contract instruction for the LLM.
+     * @param userMessage   The rendered prompt to send.
+     * @param temperature   Sampling temperature (lower = more deterministic).
+     * @param maxTokens     Maximum tokens in the response.
+     * @return Raw LLM response text, or {@code null} on unrecoverable failure.
+     * @throws LlmServiceException if the LLM returns an empty or null response.
+     */
+    private String callLlm(String systemMessage, String userMessage, float temperature, int maxTokens) {
+        try {
+            log.debug("Calling LLM — temperature={}, maxTokens={}", temperature, maxTokens);
+
+            OpenAiChatOptions options = OpenAiChatOptions.builder()
+                    .temperature((double) temperature)
+                    .maxTokens(maxTokens)
+                    .build();
+
+            String content = chatClient.prompt()
+                    .system(systemMessage)
+                    .user(userMessage)
+                    .options(options)
+                    .call()
+                    .content();
+
+            if (content == null || content.isBlank()) {
+                throw new LlmServiceException("LLM returned an empty response");
+            }
+
+            return content;
+
+        } catch (LlmServiceException e) {
+            throw e;
+        } catch (Exception e) {
+            String errorMsg = "LLM API call failed: " + e.getMessage();
+            log.error(errorMsg, e);
+            throw new LlmServiceException(errorMsg, e);
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Private helpers — response parsing
+    // -------------------------------------------------------------------------
+
+    /**
+     * Parse the LLM response for resume analysis into a typed Java object.
+     * Returns a safe fallback when the LLM is unreachable or the response is malformed.
+     */
+    private ResumeAnalysisResponse parseResumeAnalysisResponse(String rawResponse) {
+        try {
+            String json = extractJson(rawResponse);
+            return objectMapper.readValue(json, ResumeAnalysisResponse.class);
+        } catch (LlmServiceException e) {
+            log.warn("LLM unavailable during resume analysis — returning fallback. Reason: {}", e.getMessage());
+        } catch (Exception e) {
+            log.error("Failed to parse LLM resume-analysis response. Raw response: {}", rawResponse, e);
+        }
+        return ResumeAnalysisResponse.builder()
+                .name("Unknown")
+                .email("")
+                .mobile("")
+                .experienceSummary("Resume processed (AI analysis unavailable)")
+                .skills("")
+                .domainKnowledge("")
+                .academicBackground("")
+                .yearsOfExperience(0)
+                .confidenceScore(0.0)
+                .build();
+    }
+
+    /**
+     * Parse the LLM response for candidate matching into a typed Java object.
+     * Returns a safe fallback when the LLM is unreachable or the response is malformed.
+     */
+    private CandidateMatchResponse parseMatchingResponse(String rawResponse) {
+        try {
+            String json = extractJson(rawResponse);
+            return objectMapper.readValue(json, CandidateMatchResponse.class);
+        } catch (LlmServiceException e) {
+            log.warn("LLM unavailable during candidate matching — returning fallback. Reason: {}", e.getMessage());
+        } catch (Exception e) {
+            log.error("Failed to parse LLM candidate-matching response. Raw response: {}", rawResponse, e);
+        }
+        return CandidateMatchResponse.builder()
+                .matchScore(0.0)
+                .skillsScore(0.0)
+                .experienceScore(0.0)
+                .educationScore(0.0)
+                .domainScore(0.0)
+                .explanation("AI matching temporarily unavailable — please retry shortly.")
+                .strengths("")
+                .gaps("")
+                .recommendation("Error in Analysis")
+                .build();
+    }
+
+    /**
+     * Extract the first complete JSON object from an LLM response string.
+     *
+     * <p>Some LLMs wrap their JSON in markdown code fences or add introductory text.
+     * This method strips that noise by locating the outermost {@code { … }} block.</p>
+     *
+     * @param response Raw LLM response.
+     * @return Clean JSON string.
+     * @throws LlmServiceException if no JSON object can be detected.
      */
     private String extractJson(String response) {
         if (response == null || response.isBlank()) {
-            throw new IllegalArgumentException("AI returned null or empty response");
-        }
-        // Find first { and last }
-        int startIndex = response.indexOf('{');
-        int endIndex = response.lastIndexOf('}');
-
-        if (startIndex != -1 && endIndex != -1 && endIndex > startIndex) {
-            return response.substring(startIndex, endIndex + 1);
+            throw new LlmServiceException("LLM returned null or empty response — cannot extract JSON");
         }
 
-        return response;
+        // Strip markdown code fences that some models emit: ```json ... ```
+        String cleaned = response.replaceAll("(?s)```[a-zA-Z]*\\n?", "").replaceAll("```", "").strip();
+
+        int start = cleaned.indexOf('{');
+        int end   = cleaned.lastIndexOf('}');
+
+        if (start != -1 && end != -1 && end > start) {
+            return cleaned.substring(start, end + 1);
+        }
+
+        throw new LlmServiceException(
+                "No JSON object found in LLM response. Response starts with: "
+                + response.substring(0, Math.min(200, response.length())));
+    }
+
+    // -------------------------------------------------------------------------
+    // Private helpers — misc
+    // -------------------------------------------------------------------------
+
+    private static String nullSafe(String value) {
+        return value != null ? value : "";
+    }
+
+    private static String buildEnrichedSection(String enrichedProfileContext) {
+        if (enrichedProfileContext == null || enrichedProfileContext.isBlank()) {
+            return "";
+        }
+        return "\nEXTERNAL PROFILE DATA (from GitHub / LinkedIn / Internet):\n"
+                + enrichedProfileContext + "\n";
     }
 }

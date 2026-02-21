@@ -1,7 +1,9 @@
 package io.subbu.ai.firedrill.services;
 
+import io.subbu.ai.firedrill.config.EnrichmentProperties;
 import io.subbu.ai.firedrill.config.SecurityUtils;
 import io.subbu.ai.firedrill.entities.Candidate;
+import io.subbu.ai.firedrill.entities.ExternalProfileSource;
 import io.subbu.ai.firedrill.entities.CandidateMatch;
 import io.subbu.ai.firedrill.entities.JobRequirement;
 import io.subbu.ai.firedrill.entities.MatchAudit;
@@ -34,6 +36,7 @@ public class CandidateMatchingService {
     private final AIService aiService;
     private final MatchAuditService matchAuditService;
     private final CandidateProfileEnrichmentService enrichmentService;
+    private final EnrichmentProperties enrichmentProps;
 
     /**
      * Match a single candidate against a job requirement.
@@ -190,21 +193,83 @@ public class CandidateMatchingService {
     }
 
     /**
-     * Perform AI-based matching between candidate and job.
-     * 
-     * @param candidate Candidate entity
-     * @param job Job requirement entity
-     * @return AI matching response
+     * Full agentic RAG matching pipeline:
+     * <ol>
+     *   <li>Refresh profiles that are past the staleness TTL</li>
+     *   <li>Ensure a baseline INTERNET_SEARCH profile exists and is fresh</li>
+     *   <li>Optionally run LLM source-selector to fetch targeted profiles</li>
+     *   <li>Build a job-aware, relevance-ranked enrichment context</li>
+     *   <li>First-pass AI match</li>
+     *   <li>Multi-pass re-match for borderline candidates using freshly fetched data</li>
+     * </ol>
      */
     private CandidateMatchResponse performAIMatching(Candidate candidate, JobRequirement job) {
-        // Include enriched profile context if available
-        String enrichedContext = null;
+
+        // Step 1 — TTL-based staleness refresh
         try {
-            enrichedContext = enrichmentService.buildEnrichmentContext(candidate.getId());
+            enrichmentService.refreshStaleProfiles(candidate);
         } catch (Exception e) {
-            log.warn("Could not load enrichment context for candidate {}: {}", candidate.getId(), e.getMessage());
+            log.warn("[AGENTIC] Staleness refresh failed for {}: {}", candidate.getName(), e.getMessage());
         }
 
+        // Step 2 — Always ensure a baseline INTERNET_SEARCH profile is present
+        try {
+            enrichmentService.ensureInternetSearchFresh(candidate);
+        } catch (Exception e) {
+            log.warn("[AGENTIC] ensureInternetSearchFresh failed for {}: {}", candidate.getName(), e.getMessage());
+        }
+
+        // Step 3 — LLM source selector (opt-in)
+        if (enrichmentProps.isSourceSelectionEnabled()) {
+            try {
+                List<ExternalProfileSource> sources = aiService.selectEnrichmentSources(candidate, job);
+                log.info("[AGENTIC] LLM selected sources for {}: {}", candidate.getName(), sources);
+                enrichmentService.autoEnrich(candidate, sources);
+            } catch (Exception e) {
+                log.warn("[AGENTIC] Source selection/auto-enrich failed for {}: {}", candidate.getName(), e.getMessage());
+            }
+        }
+
+        // Step 4 — Job-aware ranked enrichment context
+        String enrichedContext = null;
+        try {
+            enrichedContext = enrichmentService.buildEnrichmentContext(candidate.getId(), job);
+        } catch (Exception e) {
+            log.warn("[AGENTIC] buildEnrichmentContext failed for {}: {}", candidate.getId(), e.getMessage());
+        }
+
+        // Step 5 — First-pass match
+        CandidateMatchResponse firstPass = doMatch(candidate, job, enrichedContext);
+        log.info("[AGENTIC] First-pass score for {}: {}", candidate.getName(), firstPass.getMatchScore());
+
+        // Step 6 — Multi-pass for borderline candidates when we had no context the first time
+        if (enrichmentProps.getMultiPass().isEnabled()
+                && enrichedContext == null
+                && firstPass.getMatchScore() >= enrichmentProps.getMultiPass().getBorderlineMin()
+                && firstPass.getMatchScore() <= enrichmentProps.getMultiPass().getBorderlineMax()) {
+
+            log.info("[AGENTIC] Borderline score {:.0f} for {} — running second pass with enrichment",
+                    firstPass.getMatchScore(), candidate.getName());
+            try {
+                String enrichedContext2 = enrichmentService.buildEnrichmentContext(candidate.getId(), job);
+                if (enrichedContext2 != null) {
+                    CandidateMatchResponse secondPass = doMatch(candidate, job, enrichedContext2);
+                    log.info("[AGENTIC] Multi-pass score: {:.0f} → {:.0f} for {}",
+                            firstPass.getMatchScore(), secondPass.getMatchScore(), candidate.getName());
+                    return secondPass;
+                }
+            } catch (Exception e) {
+                log.warn("[AGENTIC] Multi-pass failed for {}: {}", candidate.getName(), e.getMessage());
+            }
+        }
+
+        return firstPass;
+    }
+
+    /**
+     * Single AI match call — shared by first-pass and multi-pass.
+     */
+    private CandidateMatchResponse doMatch(Candidate candidate, JobRequirement job, String enrichedContext) {
         CandidateMatchRequest matchRequest = CandidateMatchRequest.builder()
                 .experienceSummary(candidate.getExperienceSummary())
                 .skills(candidate.getSkills())
@@ -220,7 +285,6 @@ public class CandidateMatchingService {
                 .maxExperienceYears(job.getMaxExperienceYears())
                 .enrichedProfileContext(enrichedContext)
                 .build();
-
         return aiService.matchCandidate(matchRequest);
     }
 

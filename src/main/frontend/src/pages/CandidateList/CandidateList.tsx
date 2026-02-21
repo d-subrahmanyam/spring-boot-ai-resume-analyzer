@@ -9,6 +9,7 @@ import {
 import {
   fetchExternalProfiles,
   enrichProfile,
+  enrichFromUrl,
   refreshProfile,
   type ExternalProfileSource,
   type CandidateExternalProfile,
@@ -32,6 +33,7 @@ const CandidateList = () => {
   const [showFeedbackForm, setShowFeedbackForm] = useState(false)
   const [feedbackRefreshTrigger, setFeedbackRefreshTrigger] = useState(0)
   const [expandedEnrichmentId, setExpandedEnrichmentId] = useState<string | null>(null)
+  const [urlInputByCandidateId, setUrlInputByCandidateId] = useState<Record<string, string>>({})
 
   useEffect(() => {
     dispatch(fetchCandidates())
@@ -93,6 +95,14 @@ const CandidateList = () => {
     dispatch(refreshProfile({ profileId: profile.id, candidateId }))
   }
 
+  const handleEnrichFromUrl = (candidateId: string) => {
+    const url = (urlInputByCandidateId[candidateId] ?? '').trim()
+    if (!url) return
+    dispatch(enrichFromUrl({ candidateId, profileUrl: url }))
+    setUrlInputByCandidateId((prev) => ({ ...prev, [candidateId]: '' }))
+    if (expandedEnrichmentId !== candidateId) setExpandedEnrichmentId(candidateId)
+  }
+
   const getStatusBadgeClass = (status: string) => {
     switch (status) {
       case 'SUCCESS': return styles.statusSuccess
@@ -107,6 +117,7 @@ const CandidateList = () => {
     switch (source) {
       case 'GITHUB': return '🐙'
       case 'LINKEDIN': return '💼'
+      case 'TWITTER': return '🐦'
       case 'INTERNET_SEARCH': return '🌐'
       default: return '🔗'
     }
@@ -235,11 +246,40 @@ const CandidateList = () => {
                       </button>
                       <button
                         className={styles.enrichSourceBtn}
+                        onClick={() => handleEnrich(candidate.id, 'TWITTER')}
+                        disabled={enrichingCandidateId === candidate.id}
+                        title="Fetch from Twitter/X"
+                      >
+                        {enrichingCandidateId === candidate.id ? '⏳' : '🐦'} Twitter
+                      </button>
+                      <button
+                        className={styles.enrichSourceBtn}
                         onClick={() => handleEnrich(candidate.id, 'INTERNET_SEARCH')}
                         disabled={enrichingCandidateId === candidate.id}
                         title="Aggregate from internet"
                       >
                         {enrichingCandidateId === candidate.id ? '⏳' : '🌐'} Web
+                      </button>
+                    </div>
+                    <div className={styles.enrichFromUrlRow}>
+                      <input
+                        type="url"
+                        placeholder="Paste a profile URL (github.com, x.com, linkedin.com…)"
+                        className={styles.enrichUrlInput}
+                        value={urlInputByCandidateId[candidate.id] ?? ''}
+                        onChange={(e) =>
+                          setUrlInputByCandidateId((prev) => ({ ...prev, [candidate.id]: e.target.value }))
+                        }
+                        onKeyDown={(e) => e.key === 'Enter' && handleEnrichFromUrl(candidate.id)}
+                        disabled={enrichingCandidateId === candidate.id}
+                      />
+                      <button
+                        className={styles.enrichSourceBtn}
+                        onClick={() => handleEnrichFromUrl(candidate.id)}
+                        disabled={enrichingCandidateId === candidate.id || !(urlInputByCandidateId[candidate.id] ?? '').trim()}
+                        title="Enrich from URL"
+                      >
+                        🔗 Enrich
                       </button>
                     </div>
                   </div>

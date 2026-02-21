@@ -593,6 +593,29 @@ export const ENRICH_CANDIDATE_PROFILE = `
   }
 `
 
+export const ENRICH_CANDIDATE_PROFILE_FROM_URL = `
+  mutation EnrichCandidateProfileFromUrl($candidateId: UUID!, $profileUrl: String!) {
+    enrichCandidateProfileFromUrl(candidateId: $candidateId, profileUrl: $profileUrl) {
+      id
+      source
+      profileUrl
+      displayName
+      bio
+      location
+      company
+      publicRepos
+      followers
+      repositories
+      enrichedSummary
+      status
+      errorMessage
+      lastFetchedAt
+      createdAt
+      updatedAt
+    }
+  }
+`
+
 export const REFRESH_CANDIDATE_PROFILE = `
   mutation RefreshCandidateProfile($profileId: UUID!) {
     refreshCandidateProfile(profileId: $profileId) {

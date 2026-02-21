@@ -49,6 +49,26 @@ public class CandidateProfileEnrichmentResolver {
     }
 
     /**
+     * Auto-detect the source from a social profile URL and enrich the candidate's
+     * profile from that source.  Returns null if no enricher recognises the URL.
+     *
+     * <p>Use this mutation when a profile URL is already known (e.g. extracted
+     * from a resume via an MCP tool) so the caller doesn't need to know which
+     * {@link ExternalProfileSource} the URL belongs to.</p>
+     *
+     * @param candidateId the candidate UUID
+     * @param profileUrl  a social profile URL (github.com, linkedin.com, x.com …)
+     */
+    @MutationMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER')")
+    public CandidateExternalProfile enrichCandidateProfileFromUrl(
+            @Argument UUID candidateId,
+            @Argument String profileUrl) {
+        log.info("Enriching profile from URL {} for candidate {}", profileUrl, candidateId);
+        return enrichmentService.enrichFromUrl(candidateId, profileUrl);
+    }
+
+    /**
      * Refresh an existing external profile by its own ID.
      */
     @MutationMapping

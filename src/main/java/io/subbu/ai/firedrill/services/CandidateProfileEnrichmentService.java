@@ -1,333 +1,346 @@
 package io.subbu.ai.firedrill.services;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.subbu.ai.firedrill.entities.Candidate;
 import io.subbu.ai.firedrill.entities.CandidateExternalProfile;
 import io.subbu.ai.firedrill.entities.ExternalProfileSource;
+import io.subbu.ai.firedrill.entities.JobRequirement;
 import io.subbu.ai.firedrill.repos.CandidateExternalProfileRepository;
 import io.subbu.ai.firedrill.repos.CandidateRepository;
-import lombok.RequiredArgsConstructor;
+import io.subbu.ai.firedrill.services.enrichers.ProfileEnricher;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.*;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.client.HttpClientErrorException;
-import org.springframework.web.client.RestTemplate;
-import org.springframework.web.util.UriComponentsBuilder;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
- * Service for fetching and storing candidate profile information from external
- * sources such as GitHub. The enriched data is later used to augment candidate
- * matching context for more accurate AI-based scoring.
+ * Orchestrates candidate profile enrichment from multiple external sources.
+ *
+ * <h3>Design — Strategy Pattern</h3>
+ * <p>All {@link ProfileEnricher} implementations registered as Spring beans are
+ * discovered automatically at startup and keyed by their
+ * {@link ExternalProfileSource}.  The service routes each request to the correct
+ * enricher without containing any source-specific logic itself.</p>
+ *
+ * <h3>Adding a new source</h3>
+ * <ol>
+ *   <li>Add a value to {@link ExternalProfileSource}.</li>
+ *   <li>Create an {@code @Component} implementing {@link ProfileEnricher}.</li>
+ *   <li>No changes required here.</li>
+ * </ol>
  */
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class CandidateProfileEnrichmentService {
 
-    private static final String GITHUB_API_BASE = "https://api.github.com";
-    private static final String USER_AGENT = "ResumeAnalyzer/1.0";
-
     private final CandidateExternalProfileRepository externalProfileRepository;
     private final CandidateRepository candidateRepository;
-    private final ObjectMapper objectMapper = new ObjectMapper();
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final Map<ExternalProfileSource, ProfileEnricher> enricherMap;
+    private final List<ProfileEnricher> enricherList;
 
-    /**
-     * Get all external profiles for a candidate.
-     *
-     * @param candidateId Candidate UUID
-     * @return list of external profiles
-     */
+    @Value("${app.enrichment.staleness-ttl-days:7}")
+    private int stalenessTtlDays;
+
+    public CandidateProfileEnrichmentService(
+            CandidateExternalProfileRepository externalProfileRepository,
+            CandidateRepository candidateRepository,
+            List<ProfileEnricher> enrichers) {
+
+        this.externalProfileRepository = externalProfileRepository;
+        this.candidateRepository = candidateRepository;
+        this.enricherList = List.copyOf(enrichers);
+        this.enricherMap = enrichers.stream()
+                .collect(Collectors.toMap(ProfileEnricher::getSource, Function.identity()));
+
+        log.info("CandidateProfileEnrichmentService ready with {} enricher(s): {}",
+                enrichers.size(),
+                enrichers.stream().map(e -> e.getSource().name()).collect(Collectors.joining(", ")));
+    }
+
+    // =========================================================================
+    // Queries
+    // =========================================================================
+
+    /** Returns all external profiles stored for the given candidate. */
     public List<CandidateExternalProfile> getExternalProfiles(UUID candidateId) {
         return externalProfileRepository.findByCandidateId(candidateId);
     }
 
+    // =========================================================================
+    // Enrichment operations
+    // =========================================================================
+
     /**
-     * Enrich a candidate's profile from the specified source.
-     * If a profile for this source already exists, it is refreshed.
-     *
-     * @param candidateId Candidate UUID
-     * @param source      External source to fetch from
-     * @return the upserted CandidateExternalProfile
+     * Enriches a candidate profile from the specified source.
+     * If a profile for this source already exists it is refreshed.
      */
     @Transactional
     public CandidateExternalProfile enrichProfile(UUID candidateId, ExternalProfileSource source) {
-        Candidate candidate = candidateRepository.findById(candidateId)
-                .orElseThrow(() -> new IllegalArgumentException("Candidate not found: " + candidateId));
+        Candidate candidate = requireCandidate(candidateId);
+        ProfileEnricher enricher = requireEnricher(source);
+        CandidateExternalProfile profile = getOrCreate(candidate, source);
+        log.info("Enriching {} profile for candidate: {}", source, candidate.getName());
+        return enricher.enrich(profile, candidate);
+    }
 
-        CandidateExternalProfile profile = externalProfileRepository
-                .findByCandidateIdAndSource(candidateId, source)
+    /**
+     * Auto-detects the source from a social profile URL, then enriches.
+     * Returns {@code null} if no enricher recognises the URL.
+     *
+     * @param candidateId UUID of the candidate
+     * @param profileUrl  URL parsed from the candidate's resume (GitHub, LinkedIn, X…)
+     */
+    @Transactional
+    public CandidateExternalProfile enrichFromUrl(UUID candidateId, String profileUrl) {
+        Candidate candidate = requireCandidate(candidateId);
+        Optional<ProfileEnricher> match = enricherList.stream()
+                .filter(e -> e.supportsUrl(profileUrl))
+                .findFirst();
+
+        if (match.isEmpty()) {
+            log.warn("No enricher found for URL: {}", profileUrl);
+            return null;
+        }
+
+        ProfileEnricher enricher = match.get();
+        CandidateExternalProfile profile = getOrCreate(candidate, enricher.getSource());
+        profile.setProfileUrl(profileUrl);
+        log.info("Enriching {} profile from URL {} for candidate: {}",
+                enricher.getSource(), profileUrl, candidate.getName());
+        return enricher.enrich(profile, candidate);
+    }
+
+    /**
+     * Refreshes an existing external profile by its own ID.
+     */
+    @Transactional
+    public CandidateExternalProfile refreshProfile(UUID profileId) {
+        CandidateExternalProfile profile = externalProfileRepository.findById(profileId)
+                .orElseThrow(() -> new IllegalArgumentException("External profile not found: " + profileId));
+        ProfileEnricher enricher = requireEnricher(profile.getSource());
+        log.info("Refreshing {} profile (id: {}) for candidate: {}",
+                profile.getSource(), profileId, profile.getCandidate().getName());
+        return enricher.enrich(profile, profile.getCandidate());
+    }
+
+    // =========================================================================
+    // Context building for AI matching
+    // =========================================================================
+
+    /**
+     * Aggregates all SUCCESS profiles into a formatted context string for AI prompts.
+     *
+     * @return context string, or {@code null} if no successful profiles exist
+     */
+    public String buildEnrichmentContext(UUID candidateId) {
+        List<CandidateExternalProfile> profiles =
+                externalProfileRepository.findByCandidateIdAndStatus(candidateId, "SUCCESS");
+        if (profiles.isEmpty()) return null;
+
+        var sb = new StringBuilder("--- External Profile Information ---\n");
+        for (CandidateExternalProfile p : profiles) {
+            appendProfile(sb, p);
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Job-aware variant: profiles are ranked by their relevance to the given job
+     * requirement before being assembled into the context string, so the LLM sees
+     * the most useful evidence first.
+     *
+     * <p>Relevance scoring:
+     * <ul>
+     *   <li>GITHUB scores highest for engineering/coding roles</li>
+     *   <li>TWITTER scores highest for community/advocacy roles</li>
+     *   <li>LINKEDIN always provides professional context</li>
+     *   <li>INTERNET_SEARCH provides baseline context</li>
+     * </ul>
+     */
+    public String buildEnrichmentContext(UUID candidateId, JobRequirement job) {
+        List<CandidateExternalProfile> profiles =
+                externalProfileRepository.findByCandidateIdAndStatus(candidateId, "SUCCESS");
+        if (profiles.isEmpty()) return null;
+
+        String jobText = String.join(" ",
+                nullSafe(job.getTitle()), nullSafe(job.getDescription()),
+                nullSafe(job.getRequiredSkills()), nullSafe(job.getDomainRequirements())
+        ).toLowerCase();
+
+        var sb = new StringBuilder("--- External Profile Information (ranked by job relevance) ---\n");
+        profiles.stream()
+                .sorted(Comparator.comparingInt(
+                        (CandidateExternalProfile p) -> profileRelevanceScore(p.getSource(), jobText))
+                        .reversed())
+                .forEach(p -> appendProfile(sb, p));
+        return sb.toString();
+    }
+
+    // =========================================================================
+    // Agentic enrichment helpers
+    // =========================================================================
+
+    /**
+     * Guarantees an up-to-date INTERNET_SEARCH profile exists.
+     * This is always fast (no external API) and acts as a baseline for the agentic loop.
+     */
+    @Transactional
+    public void ensureInternetSearchFresh(Candidate candidate) {
+        Optional<CandidateExternalProfile> existing =
+                externalProfileRepository.findByCandidateIdAndSource(
+                        candidate.getId(), ExternalProfileSource.INTERNET_SEARCH);
+        boolean needsRefresh = existing.isEmpty()
+                || !"SUCCESS".equals(existing.get().getStatus())
+                || isStale(existing.get());
+
+        if (needsRefresh) {
+            String reason = existing.isEmpty() ? "missing" : isStale(existing.get()) ? "stale" : "failed";
+            log.info("[AUTO-ENRICH] Running INTERNET_SEARCH for {} ({})", candidate.getName(), reason);
+            ProfileEnricher enricher = enricherMap.get(ExternalProfileSource.INTERNET_SEARCH);
+            if (enricher != null) {
+                CandidateExternalProfile profile = existing.orElseGet(() ->
+                        CandidateExternalProfile.builder()
+                                .candidate(candidate)
+                                .source(ExternalProfileSource.INTERNET_SEARCH)
+                                .status("PENDING")
+                                .build());
+                enricher.enrich(profile, candidate);
+            }
+        }
+    }
+
+    /**
+     * Refreshes all SUCCESS profiles for the given candidate that are older than
+     * the configured staleness TTL.  Stale profiles give the LLM outdated context.
+     */
+    @Transactional
+    public void refreshStaleProfiles(Candidate candidate) {
+        List<CandidateExternalProfile> profiles =
+                externalProfileRepository.findByCandidateId(candidate.getId());
+        for (CandidateExternalProfile profile : profiles) {
+            if ("SUCCESS".equals(profile.getStatus()) && isStale(profile)) {
+                ProfileEnricher enricher = enricherMap.get(profile.getSource());
+                if (enricher != null) {
+                    log.info("[STALENESS] Refreshing {} for {} (last fetched: {})",
+                            profile.getSource(), candidate.getName(), profile.getLastFetchedAt());
+                    try {
+                        enricher.enrich(profile, candidate);
+                    } catch (Exception e) {
+                        log.warn("[STALENESS] Refresh failed for {} {}: {}",
+                                profile.getSource(), candidate.getName(), e.getMessage());
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Fetches external profiles for each recommended source, skipping those
+     * that already have a fresh SUCCESS record.
+     * Called after the LLM source selector has recommended specific sources.
+     */
+    @Transactional
+    public void autoEnrich(Candidate candidate, List<ExternalProfileSource> sources) {
+        for (ExternalProfileSource source : sources) {
+            Optional<CandidateExternalProfile> existing =
+                    externalProfileRepository.findByCandidateIdAndSource(candidate.getId(), source);
+            boolean needsFetch = existing.isEmpty()
+                    || !"SUCCESS".equals(existing.get().getStatus())
+                    || isStale(existing.get());
+
+            if (needsFetch) {
+                ProfileEnricher enricher = enricherMap.get(source);
+                if (enricher != null) {
+                    log.info("[AUTO-ENRICH] Fetching {} for {}", source, candidate.getName());
+                    CandidateExternalProfile profile = existing.orElseGet(() ->
+                            CandidateExternalProfile.builder()
+                                    .candidate(candidate)
+                                    .source(source)
+                                    .status("PENDING")
+                                    .build());
+                    try {
+                        enricher.enrich(profile, candidate);
+                    } catch (Exception e) {
+                        log.warn("[AUTO-ENRICH] {} failed for {}: {}", source, candidate.getName(), e.getMessage());
+                    }
+                }
+            }
+        }
+    }
+
+    // =========================================================================
+    // Private helpers
+    // =========================================================================
+
+    private boolean isStale(CandidateExternalProfile profile) {
+        if (profile.getLastFetchedAt() == null) return true;
+        return profile.getLastFetchedAt().isBefore(LocalDateTime.now().minusDays(stalenessTtlDays));
+    }
+
+    private static int profileRelevanceScore(ExternalProfileSource source, String jobText) {
+        return switch (source) {
+            case GITHUB -> containsAny(jobText,
+                    "developer", "engineer", "software", "coding", "code", "github",
+                    "open source", "backend", "frontend", "fullstack",
+                    "java", "python", "javascript", "typescript", "golang", "rust") ? 3 : 1;
+            case TWITTER -> containsAny(jobText,
+                    "social", "community", "advocate", "evangelist", "content",
+                    "marketing", "brand", "speaker", "influencer", "developer relations") ? 3 : 0;
+            case LINKEDIN -> 2;         // always professionally relevant
+            case INTERNET_SEARCH -> 1;  // always provide baseline context
+        };
+    }
+
+    private static boolean containsAny(String text, String... keywords) {
+        for (String kw : keywords) {
+            if (text.contains(kw)) return true;
+        }
+        return false;
+    }
+
+    private void appendProfile(StringBuilder sb, CandidateExternalProfile p) {
+        sb.append(String.format("[Source: %s]\n", p.getSource().name()));
+        if (p.getProfileUrl() != null)       sb.append("Profile URL: ").append(p.getProfileUrl()).append('\n');
+        if (present(p.getBio()))             sb.append("Bio: ").append(p.getBio()).append('\n');
+        if (p.getCompany() != null)          sb.append("Company: ").append(p.getCompany()).append('\n');
+        if (p.getLocation() != null)         sb.append("Location: ").append(p.getLocation()).append('\n');
+        if (p.getPublicRepos() != null)      sb.append("Public Repos: ").append(p.getPublicRepos()).append('\n');
+        if (p.getFollowers() != null)        sb.append("Followers: ").append(p.getFollowers()).append('\n');
+        if (present(p.getEnrichedSummary())) sb.append("Summary: ").append(p.getEnrichedSummary()).append('\n');
+        if (present(p.getRepositories()))    sb.append("Top Projects: ").append(p.getRepositories()).append('\n');
+        sb.append('\n');
+    }
+
+    private Candidate requireCandidate(UUID id) {
+        return candidateRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Candidate not found: " + id));
+    }
+
+    private ProfileEnricher requireEnricher(ExternalProfileSource source) {
+        ProfileEnricher e = enricherMap.get(source);
+        if (e == null) throw new IllegalArgumentException(
+                "No ProfileEnricher registered for: " + source + ". Available: " + enricherMap.keySet());
+        return e;
+    }
+
+    private CandidateExternalProfile getOrCreate(Candidate candidate, ExternalProfileSource source) {
+        return externalProfileRepository
+                .findByCandidateIdAndSource(candidate.getId(), source)
                 .orElseGet(() -> CandidateExternalProfile.builder()
                         .candidate(candidate)
                         .source(source)
                         .status("PENDING")
                         .build());
-
-        return switch (source) {
-            case GITHUB -> enrichFromGitHub(profile, candidate);
-            case LINKEDIN -> enrichFromLinkedInWeb(profile, candidate);
-            case INTERNET_SEARCH -> enrichFromInternetSearch(profile, candidate);
-        };
     }
 
-    /**
-     * Refresh an existing external profile by ID.
-     *
-     * @param profileId External profile UUID
-     * @return refreshed profile
-     */
-    @Transactional
-    public CandidateExternalProfile refreshProfile(UUID profileId) {
-        CandidateExternalProfile profile = externalProfileRepository.findById(profileId)
-                .orElseThrow(() -> new IllegalArgumentException("Profile not found: " + profileId));
-
-        Candidate candidate = profile.getCandidate();
-        return switch (profile.getSource()) {
-            case GITHUB -> enrichFromGitHub(profile, candidate);
-            case LINKEDIN -> enrichFromLinkedInWeb(profile, candidate);
-            case INTERNET_SEARCH -> enrichFromInternetSearch(profile, candidate);
-        };
-    }
-
-    /**
-     * Build an enrichment context string for use in candidate matching.
-     * Aggregates all successful external profiles for a candidate.
-     *
-     * @param candidateId Candidate UUID
-     * @return formatted enrichment context, or null if no profiles
-     */
-    public String buildEnrichmentContext(UUID candidateId) {
-        List<CandidateExternalProfile> profiles = externalProfileRepository
-                .findByCandidateIdAndStatus(candidateId, "SUCCESS");
-
-        if (profiles.isEmpty()) {
-            return null;
-        }
-
-        StringBuilder sb = new StringBuilder("--- External Profile Information ---\n");
-        for (CandidateExternalProfile p : profiles) {
-            sb.append(String.format("[Source: %s]\n", p.getSource().name()));
-            if (p.getProfileUrl() != null) {
-                sb.append(String.format("Profile URL: %s\n", p.getProfileUrl()));
-            }
-            if (p.getBio() != null && !p.getBio().isBlank()) {
-                sb.append(String.format("Bio: %s\n", p.getBio()));
-            }
-            if (p.getCompany() != null) {
-                sb.append(String.format("Company: %s\n", p.getCompany()));
-            }
-            if (p.getLocation() != null) {
-                sb.append(String.format("Location: %s\n", p.getLocation()));
-            }
-            if (p.getPublicRepos() != null) {
-                sb.append(String.format("Public Repos: %d\n", p.getPublicRepos()));
-            }
-            if (p.getEnrichedSummary() != null && !p.getEnrichedSummary().isBlank()) {
-                sb.append(String.format("Additional Info: %s\n", p.getEnrichedSummary()));
-            }
-            if (p.getRepositories() != null && !p.getRepositories().isBlank()) {
-                sb.append(String.format("Notable Projects: %s\n", p.getRepositories()));
-            }
-            sb.append("\n");
-        }
-        return sb.toString();
-    }
-
-    // -------------------------------------------------------------------------
-    // Private helpers
-    // -------------------------------------------------------------------------
-
-    private CandidateExternalProfile enrichFromGitHub(CandidateExternalProfile profile, Candidate candidate) {
-        log.info("Enriching GitHub profile for candidate: {}", candidate.getName());
-        try {
-            // 1. Search GitHub users by name
-            String searchName = buildSearchName(candidate);
-            String searchUrl = UriComponentsBuilder.fromHttpUrl(GITHUB_API_BASE + "/search/users")
-                    .queryParam("q", searchName + " in:name")
-                    .queryParam("per_page", 3)
-                    .build()
-                    .toUriString();
-
-            JsonNode searchResult = callGitHubApi(searchUrl);
-            if (searchResult == null) {
-                return saveFailedProfile(profile, "GitHub API returned no response");
-            }
-
-            JsonNode items = searchResult.path("items");
-            if (!items.isArray() || items.isEmpty()) {
-                log.info("No GitHub user found for candidate: {}", candidate.getName());
-                return saveNotFoundProfile(profile);
-            }
-
-            // 2. Get the best-matched user's login
-            String login = items.get(0).path("login").asText();
-            if (login.isBlank()) {
-                return saveNotFoundProfile(profile);
-            }
-
-            // 3. Fetch detailed user profile
-            JsonNode userProfile = callGitHubApi(GITHUB_API_BASE + "/users/" + login);
-            if (userProfile == null) {
-                return saveNotFoundProfile(profile);
-            }
-
-            profile.setProfileUrl("https://github.com/" + login);
-            profile.setDisplayName(nullIfEmpty(userProfile.path("name").asText()));
-            profile.setBio(nullIfEmpty(userProfile.path("bio").asText()));
-            profile.setLocation(nullIfEmpty(userProfile.path("location").asText()));
-            profile.setCompany(nullIfEmpty(userProfile.path("company").asText()));
-            profile.setPublicRepos(userProfile.path("public_repos").asInt(0));
-            profile.setFollowers(userProfile.path("followers").asInt(0));
-
-            // 4. Fetch top repositories
-            JsonNode repos = callGitHubApi(GITHUB_API_BASE + "/users/" + login + "/repos?sort=stars&per_page=5");
-            List<String> repoNames = new ArrayList<>();
-            if (repos != null && repos.isArray()) {
-                for (JsonNode repo : repos) {
-                    String repoName = repo.path("name").asText();
-                    String repoDescription = repo.path("description").asText();
-                    int stars = repo.path("stargazers_count").asInt(0);
-                    String repoLang = repo.path("language").asText("unknown");
-                    if (!repoName.isBlank()) {
-                        repoNames.add(String.format("%s (%s, %d stars): %s", repoName, repoLang, stars, repoDescription));
-                    }
-                }
-            }
-            if (!repoNames.isEmpty()) {
-                profile.setRepositories(String.join("; ", repoNames));
-            }
-
-            // 5. Build an enriched summary
-            profile.setEnrichedSummary(buildGitHubSummary(login, userProfile, repoNames));
-            profile.setStatus("SUCCESS");
-            profile.setLastFetchedAt(LocalDateTime.now());
-            profile.setErrorMessage(null);
-
-            log.info("Successfully enriched GitHub profile for candidate: {} (login: {})", candidate.getName(), login);
-            return externalProfileRepository.save(profile);
-
-        } catch (HttpClientErrorException.TooManyRequests e) {
-            log.warn("GitHub API rate limit exceeded for candidate: {}", candidate.getName());
-            return saveFailedProfile(profile, "GitHub API rate limit exceeded — try again later.");
-        } catch (Exception e) {
-            log.error("Error enriching GitHub profile for candidate {}: {}", candidate.getName(), e.getMessage());
-            return saveFailedProfile(profile, e.getMessage());
-        }
-    }
-
-    private CandidateExternalProfile enrichFromLinkedInWeb(CandidateExternalProfile profile, Candidate candidate) {
-        // LinkedIn API requires OAuth 2.0 and is not publicly accessible.
-        // We store a placeholder indicating the source is available for future integration.
-        log.info("LinkedIn enrichment is not available without OAuth — storing placeholder for: {}", candidate.getName());
-        profile.setStatus("NOT_AVAILABLE");
-        profile.setErrorMessage("LinkedIn integration requires OAuth 2.0. Feature planned for future release.");
-        profile.setLastFetchedAt(LocalDateTime.now());
-        return externalProfileRepository.save(profile);
-    }
-
-    private CandidateExternalProfile enrichFromInternetSearch(CandidateExternalProfile profile, Candidate candidate) {
-        // Internet search can be implemented via Tavily/SerpAPI etc.
-        // For now, build a search-intent context from the candidate's existing data.
-        log.info("Building internet search context for candidate: {}", candidate.getName());
-        try {
-            String summary = buildInternetSearchSummary(candidate);
-            profile.setStatus("SUCCESS");
-            profile.setEnrichedSummary(summary);
-            profile.setDisplayName(candidate.getName());
-            profile.setLastFetchedAt(LocalDateTime.now());
-            profile.setErrorMessage(null);
-            return externalProfileRepository.save(profile);
-        } catch (Exception e) {
-            return saveFailedProfile(profile, e.getMessage());
-        }
-    }
-
-    private CandidateExternalProfile saveFailedProfile(CandidateExternalProfile profile, String errorMessage) {
-        profile.setStatus("FAILED");
-        profile.setErrorMessage(errorMessage);
-        profile.setLastFetchedAt(LocalDateTime.now());
-        return externalProfileRepository.save(profile);
-    }
-
-    private CandidateExternalProfile saveNotFoundProfile(CandidateExternalProfile profile) {
-        profile.setStatus("NOT_FOUND");
-        profile.setLastFetchedAt(LocalDateTime.now());
-        return externalProfileRepository.save(profile);
-    }
-
-    private JsonNode callGitHubApi(String url) {
-        try {
-            HttpHeaders headers = new HttpHeaders();
-            headers.set("User-Agent", USER_AGENT);
-            headers.set("Accept", "application/vnd.github.v3+json");
-            HttpEntity<Void> entity = new HttpEntity<>(headers);
-
-            ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, entity, String.class);
-            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                return objectMapper.readTree(response.getBody());
-            }
-        } catch (Exception e) {
-            log.warn("GitHub API call failed for {}: {}", url, e.getMessage());
-        }
-        return null;
-    }
-
-    /**
-     * Build a search name from candidate fields — try name + company if available.
-     */
-    private String buildSearchName(Candidate candidate) {
-        String name = Optional.ofNullable(candidate.getName()).orElse("").trim();
-        // Use first + last name only to broaden search
-        String[] parts = name.split("\\s+");
-        if (parts.length >= 2) {
-            return parts[0] + " " + parts[parts.length - 1];
-        }
-        return name;
-    }
-
-    private String buildGitHubSummary(String login, JsonNode userProfile, List<String> repoNames) {
-        StringBuilder sb = new StringBuilder();
-        int publicRepos = userProfile.path("public_repos").asInt(0);
-        int followers = userProfile.path("followers").asInt(0);
-        sb.append(String.format("GitHub username: %s. %d public repositories, %d followers. ", login, publicRepos, followers));
-
-        String blog = nullIfEmpty(userProfile.path("blog").asText());
-        if (blog != null) {
-            sb.append(String.format("Blog/website: %s. ", blog));
-        }
-
-        if (!repoNames.isEmpty()) {
-            sb.append("Top projects: ").append(String.join(", ", repoNames)).append(".");
-        }
-        return sb.toString();
-    }
-
-    private String buildInternetSearchSummary(Candidate candidate) {
-        // Build a structured text representing what internet search would yield
-        StringBuilder sb = new StringBuilder();
-        sb.append(String.format("Candidate: %s. ", candidate.getName()));
-        if (candidate.getEmail() != null) {
-            sb.append(String.format("Contact: %s. ", candidate.getEmail()));
-        }
-        if (candidate.getCurrentCompany() != null) {
-            sb.append(String.format("Currently at: %s. ", candidate.getCurrentCompany()));
-        }
-        if (candidate.getSkills() != null) {
-            sb.append(String.format("Skills: %s. ", candidate.getSkills()));
-        }
-        sb.append("(Enriched from resume data — external web search integration available via Tavily API in future.)");
-        return sb.toString();
-    }
-
-    private String nullIfEmpty(String value) {
-        return (value == null || value.isBlank() || "null".equals(value)) ? null : value;
-    }
+    private static boolean present(String s) { return s != null && !s.isBlank(); }
+    private static String nullSafe(String s) { return s != null ? s : ""; }
 }

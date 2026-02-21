@@ -416,6 +416,27 @@
   cursor: not-allowed;
 }
 
+.enrichFromUrlRow {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  align-items: center;
+}
+
+.enrichUrlInput {
+  flex: 1;
+  border: 1px solid #cbd5e0;
+  border-radius: 6px;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.8rem;
+  outline: none;
+}
+
+.enrichUrlInput:focus {
+  border-color: #667eea;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+}
+
 .enrichingText {
   color: #64748b;
   font-size: 0.85rem;

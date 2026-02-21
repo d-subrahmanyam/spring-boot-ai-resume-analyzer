@@ -17,6 +17,7 @@ import { gqlRequestWithRefresh,
   GET_RECENT_TRACKERS,
   GET_CANDIDATE_EXTERNAL_PROFILES,
   ENRICH_CANDIDATE_PROFILE,
+  ENRICH_CANDIDATE_PROFILE_FROM_URL,
   REFRESH_CANDIDATE_PROFILE,
 } from '@services/graphql'
 import { uploadResumes, getProcessStatus } from '@services/api'
@@ -290,6 +291,26 @@ function* enrichProfileSaga(action: PayloadAction<{ candidateId: string; source:
   }
 }
 
+function* enrichFromUrlSaga(action: PayloadAction<{ candidateId: string; profileUrl: string }>) {
+  try {
+    const data: { enrichCandidateProfileFromUrl: CandidateExternalProfile } = yield call(
+      gqlRequest,
+      ENRICH_CANDIDATE_PROFILE_FROM_URL,
+      { candidateId: action.payload.candidateId, profileUrl: action.payload.profileUrl }
+    )
+    if (data.enrichCandidateProfileFromUrl) {
+      yield put(enrichmentActions.enrichFromUrlSuccess({
+        candidateId: action.payload.candidateId,
+        profile: data.enrichCandidateProfileFromUrl,
+      }))
+    } else {
+      yield put(enrichmentActions.enrichFromUrlFailure('No enricher recognised that URL'))
+    }
+  } catch (error: any) {
+    yield put(enrichmentActions.enrichFromUrlFailure(error.message))
+  }
+}
+
 function* refreshProfileSaga(action: PayloadAction<{ profileId: string; candidateId: string }>) {
   try {
     const data: { refreshCandidateProfile: CandidateExternalProfile } = yield call(
@@ -329,6 +350,7 @@ export default function* rootSaga() {
     // Enrichment sagas
     takeEvery(enrichmentActions.fetchExternalProfiles.type, fetchExternalProfilesSaga),
     takeEvery(enrichmentActions.enrichProfile.type, enrichProfileSaga),
+    takeEvery(enrichmentActions.enrichFromUrl.type, enrichFromUrlSaga),
     takeEvery(enrichmentActions.refreshProfile.type, refreshProfileSaga),
   ])
 }

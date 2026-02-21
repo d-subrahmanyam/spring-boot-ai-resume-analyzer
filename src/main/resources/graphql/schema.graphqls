@@ -39,6 +39,7 @@ enum EmployeeStatus {
 enum ExternalProfileSource {
     GITHUB
     LINKEDIN
+    TWITTER
     INTERNET_SEARCH
 }
 
@@ -534,6 +535,7 @@ type Mutation {
 
     # External profile enrichment mutations
     enrichCandidateProfile(candidateId: UUID!, source: ExternalProfileSource!): CandidateExternalProfile!
+    enrichCandidateProfileFromUrl(candidateId: UUID!, profileUrl: String!): CandidateExternalProfile
     refreshCandidateProfile(profileId: UUID!): CandidateExternalProfile!
 }
 

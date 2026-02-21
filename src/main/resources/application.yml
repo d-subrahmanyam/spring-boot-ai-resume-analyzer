@@ -1,4 +1,6 @@
 spring:
+  config:
+    import: "optional:classpath:ai-prompts.yml"
   application:
     name: resume-analyzer
   
@@ -73,7 +75,30 @@ app:
   processing:
     thread-pool-size: 5
     max-retries: 3
-  
+
+  # External Profile Enrichment Configuration
+  enrichment:
+    github:
+      # Set GITHUB_API_TOKEN for authenticated access (5 000 req/hour vs 60 anonymous)
+      token: ${GITHUB_API_TOKEN:}
+    twitter:
+      # Set TWITTER_BEARER_TOKEN to enable Twitter/X profile enrichment
+      # Obtain from https://developer.twitter.com/en/portal/dashboard
+      bearer-token: ${TWITTER_BEARER_TOKEN:}
+    tavily:
+      # Set TAVILY_API_KEY to enable real web-search in the INTERNET_SEARCH enricher
+      # Obtain from https://app.tavily.com
+      api-key: ${TAVILY_API_KEY:}
+    # Profiles older than this many days are auto-refreshed before a match request
+    staleness-ttl-days: ${ENRICHMENT_STALENESS_TTL:7}
+    # When true an extra LLM call selects the most relevant sources before each match
+    source-selection-enabled: ${ENRICHMENT_SOURCE_SELECTION:false}
+    multi-pass:
+      # Re-match borderline candidates after auto-enrichment
+      enabled: ${ENRICHMENT_MULTI_PASS:true}
+      borderline-min: 50
+      borderline-max: 75
+
   # Job Scheduler Configuration
   # Set scheduler.enabled=true to use queue-based processing
   # Set scheduler.enabled=false to use legacy async processing

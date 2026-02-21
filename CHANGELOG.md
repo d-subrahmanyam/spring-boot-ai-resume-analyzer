@@ -1,5 +1,187 @@
 # Resume Analyzer - Change Summary
 
+## ✅ Phase 5: Agentic RAG — Profile Enrichment & Intelligent Matching (February 21, 2026)
+
+**Status**: ✅ Complete  
+**Scope**: Agentic 6-step matching pipeline, Tavily web search, LLM source selector, multi-pass matching, staleness management, Twitter enrichment button, URL-based enrichment, architecture documentation
+
+---
+
+### Phase 5.1: Agentic Enrichment Infrastructure
+
+#### New files
+
+| File | Purpose |
+|------|---------|
+| `src/main/java/io/subbu/ai/firedrill/config/EnrichmentProperties.java` | `@ConfigurationProperties(prefix="app.enrichment")` — typed config for Tavily API key, staleness TTL, source-selection flag, multi-pass bounds |
+| `src/main/java/io/subbu/ai/firedrill/services/enrichers/AbstractProfileEnricher.java` | Abstract base class for all enrichers (shared repo injection + `saveFailedProfile` helper) |
+| `src/main/java/io/subbu/ai/firedrill/services/enrichers/GitHubProfileEnricher.java` | GitHub REST API v3 enricher — fetches bio, repos, stars, followers, top languages |
+| `src/main/java/io/subbu/ai/firedrill/services/enrichers/LinkedInProfileEnricher.java` | Synthesises LinkedIn-style context from resume DB fields |
+| `src/main/java/io/subbu/ai/firedrill/services/enrichers/TwitterProfileEnricher.java` | Synthesises Twitter-style context from resume DB fields |
+| `src/main/java/io/subbu/ai/firedrill/services/enrichers/InternetSearchProfileEnricher.java` | **Tavily web search** + synthesised fallback (see Phase 5.3) |
+| `src/test/java/io/subbu/ai/firedrill/services/CandidateProfileEnrichmentServiceTest.java` | 21 unit tests for enrichment service (routing, fallback, URL discovery) |
+| `docs/AGENTIC-RAG.md` | Full architecture doc with 8 Mermaid diagrams |
+
+#### Modified files
+
+| File | Changes |
+|------|---------|
+| `src/main/resources/application.yml` | Added `app.enrichment.*` block: `staleness-ttl-days`, `source-selection-enabled`, `tavily.api-key`, `multi-pass.enabled/borderline-min/max` |
+| `src/main/resources/ai-prompts.yml` | Added `source-selection` prompt (system + user-template with 6 variables) |
+| `src/main/java/io/subbu/ai/firedrill/config/AiPromptsProperties.java` | Added `private PromptTemplate sourceSelection` field |
+
+---
+
+### Phase 5.2: Job-Aware Context & Staleness Management
+
+**Modified file**: `CandidateProfileEnrichmentService.java`
+
+**New methods added:**
+
+```
+buildEnrichmentContext(UUID candidateId, JobRequirement job)
+    ↳ Ranks profiles by relevance to job title before assembly
+    ↳ GITHUB scores 3 for dev roles; TWITTER scores 3 for social; LINKEDIN scores 2
+
+ensureInternetSearchFresh(Candidate)
+    ↳ Creates INTERNET_SEARCH profile if absent, or re-fetches if stale
+
+refreshStaleProfiles(Candidate)
+    ↳ Re-fetches all SUCCESS profiles older than staleness-ttl-days
+
+autoEnrich(Candidate, List<ExternalProfileSource>)
+    ↳ Fetches only the sources in the provided list, skipping fresh ones
+```
+
+**Private helpers added:** `isStale()`, `profileRelevanceScore()`, `containsAny()`, `appendProfile()`, `nullSafe()`
+
+**Backward-compatible:** existing `buildEnrichmentContext(UUID)` continues to work unchanged — used by external callers and all existing tests.
+
+---
+
+### Phase 5.3: Tavily Real Web Search
+
+**Modified file**: `InternetSearchProfileEnricher.java`
+
+**Before:** Built a synthesised text block from existing DB fields only — no external API calls.
+
+**After:**
+- Injects `EnrichmentProperties` via constructor
+- If `tavily.api-key` is set: `POST https://api.tavily.com/search` with query `"<name> <primarySkill> software developer professional profile"`, `max_results=5`, `include_answer=true`
+- Parses response: Tavily AI `answer` + top-3 `results[].content` snippets (capped at 300 chars each)
+- Falls back to synthesised context if API key is blank, response is null, or result is under 100 chars
+
+---
+
+### Phase 5.4: LLM Source Selector
+
+**Modified file**: `AIService.java`
+
+**New method:** `selectEnrichmentSources(Candidate, JobRequirement) → List<ExternalProfileSource>`
+
+- Renders `source-selection` prompt with 6 variables: `candidateSkills`, `experienceSummary`, `yearsOfExperience`, `jobTitle`, `requiredSkills`, `jobDescription`
+- Calls LLM at `temperature=0.1`, `maxTokens=300`
+- Parses JSON `{"sources": [...], "reasoning": "..."}` via Jackson `TypeReference`
+- Falls back to `[INTERNET_SEARCH]` on any parse/LLM failure
+- Opt-in: only called when `enrichment.source-selection-enabled = true`
+
+---
+
+### Phase 5.5: Agentic 6-Step Matching Loop
+
+**Modified file**: `CandidateMatchingService.java`
+
+**Changes:**
+- Added `EnrichmentProperties enrichmentProps` field (Lombok `@RequiredArgsConstructor` picks it up automatically)
+- Replaced single-call `performAIMatching()` with the full 6-step agentic loop
+- Extracted `doMatch()` helper — shared by first-pass and multi-pass
+
+**6-step pipeline:**
+
+| Step | What happens | Config |
+|------|-------------|--------|
+| 1 — Staleness | `refreshStaleProfiles(candidate)` | `staleness-ttl-days` |
+| 2 — Baseline | `ensureInternetSearchFresh(candidate)` | Always runs |
+| 3 — Source selection | `aiService.selectEnrichmentSources()` then `autoEnrich()` | `source-selection-enabled` |
+| 4 — Context | `buildEnrichmentContext(candidateId, job)` — job-aware ranking | Always runs |
+| 5 — First pass | `doMatch(candidate, job, context)` | Always runs |
+| 6 — Multi-pass | Re-enrich + `doMatch` again for borderline, context-less candidates | `multi-pass.*` |
+
+---
+
+### Phase 5.6: Frontend Enrichment Panel Improvements
+
+**Modified files:**
+
+| File | Changes |
+|------|---------|
+| `enrichmentSlice.ts` | Added `'TWITTER'` to `ExternalProfileSource` union type; added `enrichFromUrl`, `enrichFromUrlSuccess`, `enrichFromUrlFailure` actions |
+| `graphql.ts` | Added `ENRICH_CANDIDATE_PROFILE_FROM_URL` mutation |
+| `sagas/index.ts` | Added `enrichFromUrlSaga` wired to root saga; imported new mutation |
+| `CandidateList.tsx` | Added Twitter button (🐦), URL input row, `handleEnrichFromUrl` handler, `urlInputByCandidateId` state, `🐦 Twitter` icon case in `getSourceIcon()` |
+| `CandidateList.module.css` | Added `.enrichFromUrlRow` and `.enrichUrlInput` styles |
+
+**URL-based enrichment flow:**
+1. User pastes any URL into the text input on a candidate card
+2. Clicks "Enrich" button → `enrichFromUrl` action dispatched
+3. `enrichFromUrlSaga` calls `enrichCandidateProfileFromUrl(url)` GraphQL mutation
+4. Backend routes to correct enricher via `supportsUrl()` method on each enricher
+5. Result displayed as status badge on the card
+
+**Validated in browser:**
+- GitHub button: ✅ SUCCESS — fetched bio, repos, followers
+- URL enrichment (`https://github.com/torvalds`): ✅ SUCCESS — returned Linus Torvalds profile (236K followers)
+
+---
+
+### Phase 5.7: Test Suite
+
+**New test file**: `CandidateProfileEnrichmentServiceTest.java`
+
+| Test class | Tests | What it covers |
+|------------|-------|----------------|
+| `EnrichProfileRouting` | 6 | Correct enricher invoked per source, URL routing, `supportsUrl` dispatch |
+| `EnrichmentContextBuilding` | 5 | Context assembly, null/empty profile handling |
+| `StalenessLogic` | 4 | `isStale()` boundary conditions, ensureInternetSearchFresh logic |
+| `AutoEnrich` | 3 | Source list respected, fresh profiles skipped |
+| `FallbackBehaviour` | 3 | Enricher failure → FAILED status, service continues |
+| **Total** | **21** | All passing ✅ |
+
+**Fixed in this session:**
+- Removed `UnnecessaryStubbing` stubs (`when(x.supportsUrl(anyString())).thenReturn(false)` — Mockito returns false by default)
+- Replaced `verifyNoMoreInteractions` with `verify(enricher, never()).enrich(any(), any())` — `supportsUrl()` calls are legitimate interactions
+
+---
+
+### Test Results
+
+| Suite | Count | Status |
+|-------|-------|--------|
+| Backend Unit Tests | 145 | ✅ 100% passing (+21 new) |
+| Frontend Unit Tests | 89 | ✅ 100% passing |
+| E2E Tests (Playwright) | 103 | ✅ 100% passing |
+| **Total** | **337** | **✅ All passing** |
+
+---
+
+### Architecture Documentation
+
+Full architecture doc created: [`docs/AGENTIC-RAG.md`](docs/AGENTIC-RAG.md)
+
+**Diagrams included:**
+1. System architecture overview (graph TB — frontend → backend → external APIs)
+2. 6-step agentic pipeline (flowchart TD)
+3. Enricher class hierarchy (classDiagram)
+4. LLM source selector sequence (sequenceDiagram)
+5. Multi-pass matching decision (flowchart LR)
+6. Staleness management loop (flowchart TD)
+7. Tavily integration sequence (sequenceDiagram)
+8. Frontend enrichment panel state machine (stateDiagram-v2)
+9. Entity-relationship diagram (erDiagram)
+10. Redux flow sequence (sequenceDiagram)
+
+---
+
 ## ✅ Phase 4: Candidate Matching UX, Async Audit Capture & Collapsible Sidebar (February 19, 2026)
 
 **Status**: ✅ Complete  

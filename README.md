@@ -4,6 +4,23 @@
 
 Resume Analyzer is an AI-powered application that analyzes resumes, extracts candidate information, and matches candidates to job requirements using local LLM (Large Language Model) capabilities.
 
+## Recent Updates (February 21, 2026)
+
+- **🤖 Agentic RAG — Candidate Profile Enrichment & Intelligent Matching**
+  - **6-step agentic matching pipeline**: every job-match run now autonomously refreshes stale profiles, ensures a baseline web-search context exists, optionally asks the LLM *which* sources to fetch, assembles a job-aware ranked context, runs a first-pass AI score, and triggers a multi-pass re-match for borderline candidates (score 50–75)
+  - **Tavily web search**: `InternetSearchProfileEnricher` now calls the [Tavily Search API](https://tavily.com) when `TAVILY_API_KEY` is set — returns a real web answer + top-3 snippet summary for each candidate; falls back to synthesised resume context when no key is configured
+  - **LLM source selector** (opt-in via `ENRICHMENT_SOURCE_SELECTION=true`): an extra LLM call asks which of `GITHUB / LINKEDIN / TWITTER / INTERNET_SEARCH` is most relevant for the specific candidate+job combination before fetching
+  - **Staleness management**: profiles older than `ENRICHMENT_STALENESS_TTL` days (default 7) are automatically re-fetched at match time
+  - **Job-aware ranked context**: GitHub profiles score higher for engineering roles; Twitter scores higher for social/marketing roles; all profiles sorted by relevance score before assembly
+  - **Multi-pass matching**: borderline candidates with no initial context get a second AI pass with freshly fetched enrichment data
+  - **Twitter enrichment button**: added to the candidate card enrichment panel alongside GitHub and LinkedIn
+  - **URL-based enrichment**: paste any profile URL (GitHub, LinkedIn, Twitter, etc.) directly into a candidate card — the correct enricher is auto-selected via `supportsUrl()` discovery
+  - **New config class** `EnrichmentProperties` (`@ConfigurationProperties(prefix="app.enrichment")`) with typed nested config for Tavily, staleness TTL, source-selection, and multi-pass settings
+  - **Architecture doc**: [`docs/AGENTIC-RAG.md`](docs/AGENTIC-RAG.md) — full walkthrough with 8 Mermaid diagrams covering pipeline flow, class hierarchy, sequence diagrams, ER diagram, and state machine
+  - All 21 enrichment unit tests pass; full 316-test suite green
+
+---
+
 ## Recent Updates (February 19, 2026)
 
 - **🎯 Phase 4: Candidate Matching UX — Loading Indicators, Audit Capture & Collapsible Sidebar**
@@ -59,10 +76,10 @@ Resume Analyzer is an AI-powered application that analyzes resumes, extracts can
 
 | Test Suite | Tests | Status | Coverage Target | Tools |
 |------------|-------|--------|----------------|-------|
-| **Backend Unit Tests** | 124 | ✅ 100% passing (124/124) | 80%+ | JUnit 5, Mockito, Testcontainers |
+| **Backend Unit Tests** | 145 | ✅ 100% passing (145/145) | 80%+ | JUnit 5, Mockito, Testcontainers |
 | **Frontend Unit Tests** | 89 | ✅ 100% passing (89/89) | 70%+ | Vitest, React Testing Library, MSW |
 | **E2E Tests** | 103 | ✅ 100% passing (103/103) | Full UI coverage | Playwright (Chromium) |
-| **Total** | **316 tests** | **✅ 100% passing (316/316)** | - | - |
+| **Total** | **337 tests** | **✅ 100% passing (337/337)** | - | - |
 
 ### Test Coverage Breakdown
 
