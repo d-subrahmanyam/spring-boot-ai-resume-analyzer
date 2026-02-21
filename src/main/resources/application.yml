@@ -165,10 +165,10 @@ management:
       enabled: true
     db:
       enabled: true
-  metrics:
-    export:
-      prometheus:
-        enabled: true
   info:
     env:
       enabled: true
+  prometheus:
+    metrics:
+      export:
+        enabled: true
