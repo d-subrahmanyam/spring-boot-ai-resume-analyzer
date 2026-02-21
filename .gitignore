@@ -65,3 +65,4 @@ test-results/
 # Test files
 test-*.ps1
 test-*.txt
+logs/
