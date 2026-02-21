@@ -58,6 +58,11 @@ tmp/
 
 # Playwright artifacts
 .playwright-mcp/
+
+# Local dev secrets — never commit
+docker/docker-compose.local.yml
+docker/start-local.ps1
+.env
 .specify/
 playwright-report/
 test-results/
