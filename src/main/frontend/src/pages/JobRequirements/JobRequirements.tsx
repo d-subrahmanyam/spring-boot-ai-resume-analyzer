@@ -10,20 +10,29 @@ import {
 import type { Skill } from '@/store/slices/jobsSlice'
 import { RootState } from '@/store'
 import type { JobRequirement } from '@/store/slices/jobsSlice'
-import { selectCanManageJobs } from '@/store/selectors/authSelectors'
+import { selectCanManageJobs, selectIsAdmin } from '@/store/selectors/authSelectors'
 import SkillsInput from '@/components/SkillsInput/SkillsInput'
 import RangeSlider from '@/components/RangeSlider/RangeSlider'
 import FeedbackList from '@/components/FeedbackList/FeedbackList'
 import FeedbackForm from '@/components/FeedbackForm/FeedbackForm'
 import { EntityType } from '@/components/FeedbackForm/FeedbackForm'
-import { graphqlClient, SEARCH_SKILLS } from '@/services/graphql'
+import {
+  graphqlClient,
+  SEARCH_SKILLS,
+  LOAD_SAMPLE_JOBS,
+  REMOVE_SAMPLE_JOBS,
+} from '@/services/graphql'
 import styles from './JobRequirements.module.css'
 
 const JobRequirements = () => {
   const dispatch = useDispatch()
   const { jobs, selectedJob, loading } = useSelector((state: RootState) => state.jobs)
   const canManageJobs = useSelector(selectCanManageJobs)
+  const isAdmin = useSelector(selectIsAdmin)
   const [showForm, setShowForm] = useState(false)
+  const [sampleLoading, setSampleLoading] = useState(false)
+  const [sampleMessage, setSampleMessage] = useState<string | null>(null)
+  const [sampleError, setSampleError] = useState<string | null>(null)
   const [formData, setFormData] = useState<Partial<JobRequirement>>({
     title: '',
     requiredSkills: '',
@@ -112,6 +121,56 @@ const JobRequirements = () => {
     }
   }
 
+  const handleLoadSampleJobs = async () => {
+    if (!confirm('Load the sample job requirements? Existing sample titles will be skipped.')) {
+      return
+    }
+    setSampleLoading(true)
+    setSampleError(null)
+    setSampleMessage(null)
+    try {
+      const data: { loadSampleJobRequirements: JobRequirement[] } = await graphqlClient.request(
+        LOAD_SAMPLE_JOBS
+      )
+      dispatch(fetchJobs())
+      const count = data.loadSampleJobRequirements.length
+      setSampleMessage(
+        count > 0 ? `Loaded ${count} sample job requirement(s).` : 'Sample jobs already loaded.'
+      )
+    } catch (error) {
+      setSampleError(`Failed to load sample jobs: ${errorMessage(error)}`)
+    } finally {
+      setSampleLoading(false)
+    }
+  }
+
+  const handleRemoveSampleJobs = async () => {
+    if (
+      !confirm(
+        'Remove all sample job requirements? This deletes the sample jobs and their matches. This cannot be undone.'
+      )
+    ) {
+      return
+    }
+    setSampleLoading(true)
+    setSampleError(null)
+    setSampleMessage(null)
+    try {
+      const data: { removeSampleJobRequirements: number } = await graphqlClient.request(
+        REMOVE_SAMPLE_JOBS
+      )
+      dispatch(fetchJobs())
+      setSampleMessage(`Removed ${data.removeSampleJobRequirements} sample job requirement(s).`)
+    } catch (error) {
+      setSampleError(`Failed to remove sample jobs: ${errorMessage(error)}`)
+    } finally {
+      setSampleLoading(false)
+    }
+  }
+
+  const errorMessage = (error: unknown) =>
+    error instanceof Error ? error.message : String(error)
+
   const handleOpenFeedback = (jobId: string) => {
     setSelectedJobId(jobId)
     setShowFeedbackModal(true)
@@ -148,12 +207,35 @@ const JobRequirements = () => {
     <div className={styles.jobRequirements}>
       <div className={styles.header}>
         <h2>Job Requirements ({jobs.length})</h2>
-        {canManageJobs && (
-          <button onClick={handleCreateNew} className={styles.createButton}>
-            + Create New Job
-          </button>
-        )}
+        <div className={styles.headerActions}>
+          {isAdmin && (
+            <>
+              <button
+                onClick={handleLoadSampleJobs}
+                disabled={sampleLoading}
+                className={styles.sampleLoadButton}
+              >
+                {sampleLoading ? 'Working...' : 'Load Sample Jobs'}
+              </button>
+              <button
+                onClick={handleRemoveSampleJobs}
+                disabled={sampleLoading}
+                className={styles.sampleRemoveButton}
+              >
+                {sampleLoading ? 'Working...' : 'Remove Sample Jobs'}
+              </button>
+            </>
+          )}
+          {canManageJobs && (
+            <button onClick={handleCreateNew} className={styles.createButton}>
+              + Create New Job
+            </button>
+          )}
+        </div>
       </div>
+
+      {sampleMessage && <p className={styles.sampleMessage}>{sampleMessage}</p>}
+      {sampleError && <p className={styles.sampleError}>{sampleError}</p>}
 
       {showForm && (
         <div className={styles.formOverlay} onClick={() => setShowForm(false)}>

@@ -26,6 +26,64 @@
   opacity: 0.9;
 }
 
+.headerActions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.sampleLoadButton,
+.sampleRemoveButton {
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 6px;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.sampleLoadButton {
+  background: #48bb78;
+}
+
+.sampleLoadButton:hover {
+  opacity: 0.9;
+}
+
+.sampleRemoveButton {
+  background: #fc8181;
+}
+
+.sampleRemoveButton:hover {
+  opacity: 0.9;
+}
+
+.sampleLoadButton:disabled,
+.sampleRemoveButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.sampleMessage {
+  background: #f0fff4;
+  border: 1px solid #9ae6b4;
+  color: #276749;
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  margin-bottom: 1rem;
+}
+
+.sampleError {
+  background: #fff5f5;
+  border: 1px solid #fc8181;
+  color: #c53030;
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  margin-bottom: 1rem;
+}
+
 .formOverlay {
   position: fixed;
   top: 0;

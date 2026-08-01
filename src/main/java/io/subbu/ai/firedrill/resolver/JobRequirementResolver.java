@@ -4,6 +4,7 @@ import io.subbu.ai.firedrill.entities.JobRequirement;
 import io.subbu.ai.firedrill.entities.Skill;
 import io.subbu.ai.firedrill.repos.JobRequirementRepository;
 import io.subbu.ai.firedrill.repos.SkillRepository;
+import io.subbu.ai.firedrill.services.SampleJobRequirementService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.graphql.data.method.annotation.Argument;
@@ -27,6 +28,7 @@ public class JobRequirementResolver {
 
     private final JobRequirementRepository jobRepository;
     private final SkillRepository skillRepository;
+    private final SampleJobRequirementService sampleJobRequirementService;
 
     @QueryMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER', 'HIRING_MANAGER')")
@@ -153,5 +155,19 @@ public class JobRequirementResolver {
         log.info("Deleting job requirement: {}", id);
         jobRepository.deleteById(id);
         return true;
+    }
+
+    @MutationMapping
+    @PreAuthorize("hasRole('ADMIN')")
+    public List<JobRequirement> loadSampleJobRequirements() {
+        log.info("Loading sample job requirements");
+        return sampleJobRequirementService.loadSampleJobRequirements();
+    }
+
+    @MutationMapping
+    @PreAuthorize("hasRole('ADMIN')")
+    public Integer removeSampleJobRequirements() {
+        log.info("Removing sample job requirements");
+        return sampleJobRequirementService.removeSampleJobRequirements();
     }
 }

@@ -486,6 +486,9 @@ type Mutation {
     ): JobRequirement!
     deactivateJobRequirement(id: UUID!): JobRequirement!
     deleteJobRequirement(id: UUID!): Boolean!
+    # Load or remove the curated sample job requirements (admin only)
+    loadSampleJobRequirements: [JobRequirement!]!
+    removeSampleJobRequirements: Int!
     
     # Skill mutations
     createSkill(name: String!, category: String, description: String): Skill!

@@ -351,6 +351,34 @@ export const DELETE_JOB = `
   }
 `
 
+export const LOAD_SAMPLE_JOBS = `
+  mutation {
+    loadSampleJobRequirements {
+      id
+      title
+      requiredSkills
+      skills {
+        id
+        name
+        category
+      }
+      minExperienceYears
+      maxExperienceYears
+      requiredEducation
+      domainRequirements
+      description
+      isActive
+      createdAt
+    }
+  }
+`
+
+export const REMOVE_SAMPLE_JOBS = `
+  mutation {
+    removeSampleJobRequirements
+  }
+`
+
 export const UPDATE_CANDIDATE = `
   mutation UpdateCandidate(
     $id: UUID!
