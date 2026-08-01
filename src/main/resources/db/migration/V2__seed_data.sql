@@ -1,5 +1,103 @@
--- Skills Master Data
--- Insert initial set of commonly used technical skills
+-- =====================================================================
+-- Resume Analyzer - Flyway V2: seed data
+-- Default RBAC users, initial skill master data, and system health rows.
+-- All inserts are idempotent (ON CONFLICT ... DO NOTHING) so they are
+-- safe to run both on a fresh database (V1 -> V2) and on an existing
+-- pre-Flyway database (baselined at V1 -> V2 only).
+--
+-- NOTE: unlike the legacy docker/init-rbac.sql / init-skills.sql scripts,
+-- these inserts always provide id / created_at / updated_at because the
+-- JPA-managed tables define these columns WITHOUT database defaults.
+-- =====================================================================
+
+-- ---------------------------------------------------------------------
+-- Default RBAC users
+-- Passwords (BCrypt, cost 10):
+--   admin         / Admin@123
+--   recruiter     / Recruiter@123
+--   hr            / HR@123
+--   hiring_manager / Manager@123
+-- ---------------------------------------------------------------------
+
+INSERT INTO users (id, username, email, password_hash, first_name, last_name, role, is_active, created_at, updated_at)
+VALUES (
+    gen_random_uuid(),
+    'admin',
+    'admin@resume-analyzer.local',
+    '$2a$10$hhS9w38LM1MVmWoZFVy4.uJtLA3744g6uMRzkusy6T2XtbW6cnpbC',
+    'System',
+    'Administrator',
+    'ADMIN',
+    true,
+    CURRENT_TIMESTAMP,
+    CURRENT_TIMESTAMP
+) ON CONFLICT (username) DO NOTHING;
+
+INSERT INTO users (id, username, email, password_hash, first_name, last_name, role, is_active, created_at, updated_at, created_by)
+VALUES (
+    gen_random_uuid(),
+    'recruiter',
+    'recruiter@resume-analyzer.local',
+    '$2a$10$NC/jBJn6DwYhqoy8763tMOJl7nX8LKthcwvKvB6hq7MKBwXsN2CMe',
+    'Jane',
+    'Recruiter',
+    'RECRUITER',
+    true,
+    CURRENT_TIMESTAMP,
+    CURRENT_TIMESTAMP,
+    (SELECT id FROM users WHERE username = 'admin')
+) ON CONFLICT (username) DO NOTHING;
+
+INSERT INTO users (id, username, email, password_hash, first_name, last_name, role, is_active, created_at, updated_at, created_by)
+VALUES (
+    gen_random_uuid(),
+    'hr',
+    'hr@resume-analyzer.local',
+    '$2a$10$eU9MCFy.iSmwr6iULFpE0.9DT/t//9rchNd5YB/lZInoXlBIcZcIm',
+    'Bob',
+    'HR',
+    'HR',
+    true,
+    CURRENT_TIMESTAMP,
+    CURRENT_TIMESTAMP,
+    (SELECT id FROM users WHERE username = 'admin')
+) ON CONFLICT (username) DO NOTHING;
+
+INSERT INTO users (id, username, email, password_hash, first_name, last_name, role, is_active, created_at, updated_at, created_by)
+VALUES (
+    gen_random_uuid(),
+    'hiring_manager',
+    'manager@resume-analyzer.local',
+    '$2a$10$7fwuDCQ6DAEz0CL7sq7aA.7aDOs3xFf86ARCUg0HP2Iy3d/QtVNwi',
+    'Alice',
+    'Manager',
+    'HIRING_MANAGER',
+    true,
+    CURRENT_TIMESTAMP,
+    CURRENT_TIMESTAMP,
+    (SELECT id FROM users WHERE username = 'admin')
+) ON CONFLICT (username) DO NOTHING;
+
+-- ---------------------------------------------------------------------
+-- System health baseline entries
+-- Service names must match io.subbu.ai.firedrill.services.SystemHealthService
+-- (database / llm-studio / application); the app upserts these at startup.
+-- ---------------------------------------------------------------------
+
+INSERT INTO system_health (id, service_name, status, message, failure_count, last_checked_at)
+VALUES
+    (gen_random_uuid(), 'database', 'UP', 'PostgreSQL connection healthy', 0, CURRENT_TIMESTAMP),
+    (gen_random_uuid(), 'llm-studio', 'UNKNOWN', 'LM Studio not checked yet', 0, CURRENT_TIMESTAMP),
+    (gen_random_uuid(), 'application', 'UP', 'Spring Boot application running', 0, CURRENT_TIMESTAMP)
+ON CONFLICT (service_name) DO UPDATE
+SET status = EXCLUDED.status,
+    message = EXCLUDED.message,
+    failure_count = EXCLUDED.failure_count,
+    last_checked_at = CURRENT_TIMESTAMP;
+
+-- ---------------------------------------------------------------------
+-- Skills master data
+-- ---------------------------------------------------------------------
 
 -- Programming Languages
 INSERT INTO skills (id, name, category, description, is_active, created_at, updated_at) VALUES

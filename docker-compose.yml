@@ -1,3 +1,7 @@
+# Minimal local stack: PostgreSQL (with pgvector) + Resume Analyzer app.
+# Usage: docker compose up --build
+# The app talks to an external LLM Studio endpoint (default: host.docker.internal:1234).
+
 services:
   # PostgreSQL database with pgvector extension
   postgres:
@@ -13,7 +17,7 @@ services:
       - "${DB_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./init-db.sql:/docker-entrypoint-initdb.d/01-init-db.sql
+      - ./docker/init-db.sql:/docker-entrypoint-initdb.d/01-init-db.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-postgres} -d ${DB_NAME:-resume_analyzer}"]
       interval: 10s
@@ -25,7 +29,7 @@ services:
   # Resume Analyzer Application
   app:
     build:
-      context: ..
+      context: .
       dockerfile: docker/Dockerfile
     container_name: resume-analyzer-app
     restart: unless-stopped
@@ -33,25 +37,20 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      # Database Configuration
+      # Database configuration
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${DB_NAME:-resume_analyzer}
       SPRING_DATASOURCE_USERNAME: ${DB_USERNAME:-postgres}
       SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-postgres}
-      
-      # LLM Studio Configuration
+
+      # LLM Studio configuration
       LLM_STUDIO_BASE_URL: ${LLM_STUDIO_BASE_URL:-http://host.docker.internal:1234/v1}
       LLM_STUDIO_API_KEY: ${LLM_STUDIO_API_KEY:-not-needed}
       LLM_STUDIO_MODEL: ${LLM_STUDIO_MODEL:-mistralai/mistral-7b-instruct-v0.3}
       LLM_STUDIO_EMBEDDING_MODEL: ${LLM_STUDIO_EMBEDDING_MODEL:-text-embedding-nomic-embed-text-v1.5}
-      
-      # Application Configuration
-      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-docker}
+
+      # Application configuration
       SERVER_PORT: 8080
-      
-      # File Upload
       UPLOAD_DIR: /app/uploads
-      
-      # JVM Options
       JAVA_OPTS: "-Xmx1g -Xms512m"
     ports:
       - "${APP_PORT:-8080}:8080"
@@ -68,22 +67,6 @@ services:
       - resume-analyzer-network
     extra_hosts:
       - "host.docker.internal:host-gateway"
-
-  # Nginx Reverse Proxy with HTTPS
-  nginx:
-    image: nginx:alpine
-    container_name: resume-analyzer-nginx
-    restart: unless-stopped
-    depends_on:
-      - app
-    ports:
-      - "${NGINX_HTTP_PORT:-80}:80"
-      - "${NGINX_HTTPS_PORT:-443}:443"
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/ssl:/etc/nginx/ssl:ro
-    networks:
-      - resume-analyzer-network
 
 networks:
   resume-analyzer-network:

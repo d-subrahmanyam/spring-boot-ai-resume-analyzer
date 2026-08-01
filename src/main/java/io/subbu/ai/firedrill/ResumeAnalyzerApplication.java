@@ -7,12 +7,13 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * Main application class for Resume Analyzer.
- * Enables Spring Boot auto-configuration and async processing capabilities.
+ * Enables Spring Boot auto-configuration, async processing capabilities (e.g. async
+ * match audit capture) and scheduled housekeeping.
  * 
  * This application provides:
  * - AI-powered resume analysis using vector embeddings
  * - Candidate matching against job requirements
- * - Batch processing of resume uploads
+ * - Batch processing of resume uploads via an Apache Pekko actor/stream pipeline
  * - Real-time status tracking via GraphQL API
  * - System health monitoring with scheduled checks
  */

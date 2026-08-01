@@ -29,6 +29,7 @@
         <node.version>v20.11.0</node.version>
         <yarn.version>v1.22.19</yarn.version>
         <spring-ai.version>1.0.0-M6</spring-ai.version>
+        <pekko.version>1.6.0</pekko.version>
     </properties>
 
     <dependencyManagement>
@@ -53,6 +54,12 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+        
+        <!-- Flyway Database Migrations (PostgreSQL support is bundled in flyway-core for Flyway 9.x) -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
         </dependency>
         
         <dependency>
@@ -182,6 +189,23 @@
             <artifactId>jackson-databind</artifactId>
         </dependency>
 
+        <!-- Apache Pekko (actor model + reactive streams) for resume processing -->
+        <dependency>
+            <groupId>org.apache.pekko</groupId>
+            <artifactId>pekko-actor-typed_2.13</artifactId>
+            <version>${pekko.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.pekko</groupId>
+            <artifactId>pekko-stream_2.13</artifactId>
+            <version>${pekko.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.pekko</groupId>
+            <artifactId>pekko-slf4j_2.13</artifactId>
+            <version>${pekko.version}</version>
+        </dependency>
+
         <!-- Test Dependencies -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -220,6 +244,20 @@
             <groupId>org.testcontainers</groupId>
             <artifactId>junit-jupiter</artifactId>
             <version>1.19.3</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Apache Pekko testkits -->
+        <dependency>
+            <groupId>org.apache.pekko</groupId>
+            <artifactId>pekko-actor-testkit-typed_2.13</artifactId>
+            <version>${pekko.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.pekko</groupId>
+            <artifactId>pekko-stream-testkit_2.13</artifactId>
+            <version>${pekko.version}</version>
             <scope>test</scope>
         </dependency>
     </dependencies>

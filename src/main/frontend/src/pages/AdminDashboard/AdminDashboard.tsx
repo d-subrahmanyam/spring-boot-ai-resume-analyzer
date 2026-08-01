@@ -5,6 +5,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { gqlRequestWithRefresh } from '@/services/graphql'
+import { getJobQueueStats, JobQueueStats } from '@/services/api'
 import { ADMIN_DASHBOARD_ALL } from '@/graphql/adminQueries'
 import styles from './AdminDashboard.module.css'
 
@@ -115,6 +116,7 @@ const getStatusClass = (status: string) => {
 export default function AdminDashboard() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [matchAudits, setMatchAudits] = useState<MatchAudit[]>([])
+  const [pipelineStats, setPipelineStats] = useState<JobQueueStats | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
 
@@ -147,6 +149,12 @@ export default function AdminDashboard() {
       if (!isBackground) {
         setError(err instanceof Error ? err.message : 'Failed to load dashboard data')
       }
+    }
+
+    try {
+      setPipelineStats(await getJobQueueStats())
+    } catch {
+      // Pipeline panel is optional; leave it unavailable if the endpoint is off
     } finally {
       setIsRefreshing(false)
     }
@@ -318,6 +326,72 @@ export default function AdminDashboard() {
             </div>
           ))}
         </div>
+      </section>
+
+      {/* Resume Pipeline (Pekko Engine) */}
+      <section className={styles.section}>
+        <h2>Resume Pipeline (Pekko Engine)</h2>
+        {pipelineStats ? (
+          <div className={styles.healthGrid}>
+            <div className={styles.healthCard}>
+              <div className={styles.healthCardHeader}>
+                <span className={styles.serviceName}>Queue Health</span>
+                <span className={`${styles.serviceStatus} ${styles.statusHealthy}`}>
+                  ✓ Active
+                </span>
+              </div>
+              <div className={styles.healthCardBody}>
+                <div className={styles.healthMetric}>
+                  <span className={styles.metricLabel}>Active Workers:</span>
+                  <span className={styles.metricValue}>{pipelineStats.activeWorkers}</span>
+                </div>
+                <div className={styles.healthMetric}>
+                  <span className={styles.metricLabel}>Queue Depth:</span>
+                  <span className={styles.metricValue}>{pipelineStats.queueDepth}</span>
+                </div>
+                <div className={styles.healthMetric}>
+                  <span className={styles.metricLabel}>Avg Processing Duration:</span>
+                  <span className={styles.metricValue}>
+                    {pipelineStats.averageProcessingDuration
+                      ? `${pipelineStats.averageProcessingDuration.toFixed(1)}s`
+                      : '—'}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div className={styles.healthCard}>
+              <div className={styles.healthCardHeader}>
+                <span className={styles.serviceName}>Job Status</span>
+              </div>
+              <div className={styles.healthCardBody}>
+                <div className={styles.healthMetric}>
+                  <span className={styles.metricLabel}>Pending:</span>
+                  <span className={styles.metricValue}>{pipelineStats.pendingCount}</span>
+                </div>
+                <div className={styles.healthMetric}>
+                  <span className={styles.metricLabel}>Processing:</span>
+                  <span className={styles.metricValue}>{pipelineStats.processingCount}</span>
+                </div>
+                <div className={styles.healthMetric}>
+                  <span className={styles.metricLabel}>Completed:</span>
+                  <span className={styles.metricValue}>{pipelineStats.completedCount}</span>
+                </div>
+                <div className={styles.healthMetric}>
+                  <span className={styles.metricLabel}>Failed:</span>
+                  <span className={styles.metricValue}>{pipelineStats.failedCount}</span>
+                </div>
+                <div className={styles.healthMetric}>
+                  <span className={styles.metricLabel}>Cancelled:</span>
+                  <span className={styles.metricValue}>{pipelineStats.cancelledCount}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className={styles.auditEmpty}>
+            Pipeline statistics unavailable. Verify the Pekko engine is enabled and you are authenticated.
+          </div>
+        )}
       </section>
 
       {/* Statistics Grid */}

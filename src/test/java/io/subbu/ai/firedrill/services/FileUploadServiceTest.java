@@ -17,8 +17,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.*;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -29,9 +32,6 @@ class FileUploadServiceTest {
 
     @Mock
     private FileParserService fileParserService;
-
-    @Mock
-    private ResumeProcessingService resumeProcessingService;
 
     @Mock
     private ProcessTrackerRepository trackerRepository;
@@ -47,25 +47,21 @@ class FileUploadServiceTest {
     @BeforeEach
     void setUp() {
         testTrackerId = UUID.randomUUID();
-        
-        // Set default properties
+
         ReflectionTestUtils.setField(fileUploadService, "uploadDirectory", "./uploads");
         ReflectionTestUtils.setField(fileUploadService, "allowedExtensions", ".doc,.docx,.pdf");
-        ReflectionTestUtils.setField(fileUploadService, "schedulerEnabled", false);
     }
 
     // ==================== Single File Upload Tests ====================
 
     @Test
-    void testHandleFileUpload_SchedulerMode_SingleFile_Success() throws IOException {
+    void testHandleFileUpload_SingleFile_CreatesJob() throws IOException {
         // Arrange
-        ReflectionTestUtils.setField(fileUploadService, "schedulerEnabled", true);
-        
         MultipartFile file = createMockFile("resume.pdf", "PDF content");
         ProcessTracker savedTracker = createMockTracker(testTrackerId, "resume.pdf");
-        
+
         JobQueue mockJobQueue = createMockJobQueue();
-        
+
         when(fileParserService.isValidFileFormat("resume.pdf")).thenReturn(true);
         when(trackerRepository.save(any(ProcessTracker.class))).thenReturn(savedTracker);
         when(jobQueueService.createJob(any(), any(), any(), any(), any())).thenReturn(mockJobQueue);
@@ -75,11 +71,11 @@ class FileUploadServiceTest {
 
         // Assert
         assertEquals(testTrackerId, result);
-        
-        // Verify tracker creation (3 saves: initial, correlationId update, status update after job creation)
+
+        // Tracker creation: initial, correlationId update, status update after job creation
         verify(trackerRepository, times(3)).save(any(ProcessTracker.class));
-        
-        // Verify job creation (scheduler mode)
+
+        // Verify a single job was enqueued
         ArgumentCaptor<Map<String, Object>> metadataCaptor = ArgumentCaptor.forClass(Map.class);
         verify(jobQueueService).createJob(
             eq(JobType.RESUME_PROCESSING),
@@ -88,116 +84,63 @@ class FileUploadServiceTest {
             eq(JobPriority.NORMAL),
             anyString()
         );
-        
+
         Map<String, Object> metadata = metadataCaptor.getValue();
         assertEquals("resume.pdf", metadata.get("filename"));
         assertEquals(testTrackerId.toString(), metadata.get("trackerId"));
-        
-        // Verify async processing NOT called
-        verify(resumeProcessingService, never()).processSingleResume(any(), any(), any());
     }
 
     @Test
-    void testHandleFileUpload_AsyncMode_SingleFile_Success() throws IOException {
+    void testHandleFileUpload_ZipFile_CreatesJobPerEntry() throws IOException {
         // Arrange
-        ReflectionTestUtils.setField(fileUploadService, "schedulerEnabled", false);
-        
-        MultipartFile file = createMockFile("resume.docx", "DOCX content");
-        ProcessTracker savedTracker = createMockTracker(testTrackerId, "resume.docx");
-        
-        when(fileParserService.isValidFileFormat("resume.docx")).thenReturn(true);
-        when(trackerRepository.save(any(ProcessTracker.class))).thenReturn(savedTracker);
-
-        // Act
-        UUID result = fileUploadService.handleFileUpload(file);
-
-        // Assert
-        assertEquals(testTrackerId, result);
-        
-        // Verify tracker creation
-        verify(trackerRepository, times(2)).save(any(ProcessTracker.class));
-        
-        // Verify async processing called
-        verify(resumeProcessingService).processSingleResume(
-            any(byte[].class),
-            eq("resume.docx"),
-            eq(testTrackerId)
-        );
-        
-        // Verify job queue NOT used
-        verify(jobQueueService, never()).createJob(any(), any(), any(), any(), any());
-    }
-
-    @Test
-    void testHandleFileUpload_SchedulerMode_ZipFile_FallbackToAsync() throws IOException {
-        // Arrange
-        ReflectionTestUtils.setField(fileUploadService, "schedulerEnabled", true);
-        
-        MultipartFile file = createMockFile("resumes.zip", "ZIP content");
-        ProcessTracker savedTracker = createMockTracker(testTrackerId, "resumes.zip");
-        
-        when(fileParserService.isValidFileFormat("resumes.zip")).thenReturn(true);
-        when(trackerRepository.save(any(ProcessTracker.class))).thenReturn(savedTracker);
-
-        // Act
-        UUID result = fileUploadService.handleFileUpload(file);
-
-        // Assert
-        assertEquals(testTrackerId, result);
-        
-        // Verify async ZIP processing called (fallback)
-        verify(resumeProcessingService).processZipFile(
-            any(byte[].class),
-            eq("resumes.zip"),
-            eq(testTrackerId)
-        );
-        
-        // Verify job queue NOT used for ZIP in scheduler mode
-        verify(jobQueueService, never()).createJob(any(), any(), any(), any(), any());
-    }
-
-    @Test
-    void testHandleFileUpload_AsyncMode_ZipFile_Success() throws IOException {
-        // Arrange
-        ReflectionTestUtils.setField(fileUploadService, "schedulerEnabled", false);
-        
-        MultipartFile file = createMockFile("batch.zip", "ZIP content");
+        MultipartFile file = createMockFile("batch.zip", buildZip(
+            Map.of("resume1.pdf", "PDF1", "resume2.docx", "DOCX", "notes.txt", "ignore")));
         ProcessTracker savedTracker = createMockTracker(testTrackerId, "batch.zip");
-        
-        when(fileParserService.isValidFileFormat("batch.zip")).thenReturn(true);
+
+        JobQueue mockJobQueue = createMockJobQueue();
+
+        when(fileParserService.isValidFileFormat("resume1.pdf")).thenReturn(true);
+        when(fileParserService.isValidFileFormat("resume2.docx")).thenReturn(true);
+        when(fileParserService.isValidFileFormat("notes.txt")).thenReturn(false);
         when(trackerRepository.save(any(ProcessTracker.class))).thenReturn(savedTracker);
+        when(jobQueueService.createJob(any(), any(), any(), any(), any())).thenReturn(mockJobQueue);
 
         // Act
         UUID result = fileUploadService.handleFileUpload(file);
 
         // Assert
         assertEquals(testTrackerId, result);
-        
-        // Verify async ZIP processing called
-        verify(resumeProcessingService).processZipFile(
+
+        // Only supported entries are enqueued
+        verify(jobQueueService, times(2)).createJob(
+            eq(JobType.RESUME_PROCESSING),
             any(byte[].class),
-            eq("batch.zip"),
-            eq(testTrackerId)
+            any(),
+            eq(JobPriority.NORMAL),
+            anyString()
         );
+
+        // Tracker totalFiles is updated to the number of jobs created (2)
+        ArgumentCaptor<ProcessTracker> trackerCaptor = ArgumentCaptor.forClass(ProcessTracker.class);
+        verify(trackerRepository, times(3)).save(trackerCaptor.capture());
+        List<ProcessTracker> saved = trackerCaptor.getAllValues();
+        assertEquals(2, saved.get(saved.size() - 1).getTotalFiles());
     }
 
     // ==================== Multiple File Upload Tests ====================
 
     @Test
-    void testHandleMultipleFileUpload_SchedulerMode_Success() throws IOException {
+    void testHandleMultipleFileUpload_CreatesJobPerFile() throws IOException {
         // Arrange
-        ReflectionTestUtils.setField(fileUploadService, "schedulerEnabled", true);
-        
         List<MultipartFile> files = Arrays.asList(
             createMockFile("resume1.pdf", "PDF1"),
             createMockFile("resume2.docx", "DOCX"),
             createMockFile("resume3.pdf", "PDF2")
         );
-        
+
         ProcessTracker savedTracker = createMockTracker(testTrackerId, "3 files");
-        
         JobQueue mockJobQueue = createMockJobQueue();
-        
+
         when(fileParserService.isValidFileFormat(anyString())).thenReturn(true);
         when(trackerRepository.save(any(ProcessTracker.class))).thenReturn(savedTracker);
         when(jobQueueService.createJob(any(), any(), any(), any(), any())).thenReturn(mockJobQueue);
@@ -207,7 +150,7 @@ class FileUploadServiceTest {
 
         // Assert
         assertEquals(testTrackerId, result);
-        
+
         // Verify 3 jobs created in queue
         verify(jobQueueService, times(3)).createJob(
             eq(JobType.RESUME_PROCESSING),
@@ -216,41 +159,34 @@ class FileUploadServiceTest {
             eq(JobPriority.NORMAL),
             anyString()
         );
-        
-        // Verify async processing NOT called
-        verify(resumeProcessingService, never()).processMultipleResumes(any(), any(), any());
     }
 
     @Test
-    void testHandleMultipleFileUpload_AsyncMode_Success() throws IOException {
+    void testHandleMultipleFileUpload_SingleZip_CreatesJobPerEntry() throws IOException {
         // Arrange
-        ReflectionTestUtils.setField(fileUploadService, "schedulerEnabled", false);
-        
-        List<MultipartFile> files = Arrays.asList(
-            createMockFile("resume1.pdf", "PDF1"),
-            createMockFile("resume2.docx", "DOCX")
-        );
-        
-        ProcessTracker savedTracker = createMockTracker(testTrackerId, "2 files");
-        
-        when(fileParserService.isValidFileFormat(anyString())).thenReturn(true);
+        MultipartFile zip = createMockFile("batch.zip", buildZip(
+            Map.of("resume1.pdf", "PDF1", "resume2.docx", "DOCX")));
+
+        ProcessTracker savedTracker = createMockTracker(testTrackerId, "1 files");
+        JobQueue mockJobQueue = createMockJobQueue();
+
+        when(fileParserService.isValidFileFormat("resume1.pdf")).thenReturn(true);
+        when(fileParserService.isValidFileFormat("resume2.docx")).thenReturn(true);
         when(trackerRepository.save(any(ProcessTracker.class))).thenReturn(savedTracker);
+        when(jobQueueService.createJob(any(), any(), any(), any(), any())).thenReturn(mockJobQueue);
 
         // Act
-        UUID result = fileUploadService.handleMultipleFileUpload(files);
+        UUID result = fileUploadService.handleMultipleFileUpload(Collections.singletonList(zip));
 
         // Assert
         assertEquals(testTrackerId, result);
-        
-        // Verify async processing called with 2 files
-        verify(resumeProcessingService).processMultipleResumes(
-            argThat(dataList -> dataList.size() == 2),
-            argThat(names -> names.size() == 2 && names.contains("resume1.pdf")),
-            eq(testTrackerId)
+        verify(jobQueueService, times(2)).createJob(
+            eq(JobType.RESUME_PROCESSING),
+            any(byte[].class),
+            any(),
+            eq(JobPriority.NORMAL),
+            anyString()
         );
-        
-        // Verify job queue NOT used
-        verify(jobQueueService, never()).createJob(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -263,7 +199,7 @@ class FileUploadServiceTest {
             IllegalArgumentException.class,
             () -> fileUploadService.handleMultipleFileUpload(emptyFiles)
         );
-        
+
         assertEquals("No files provided", ex.getMessage());
         verify(trackerRepository, never()).save(any());
     }
@@ -281,7 +217,7 @@ class FileUploadServiceTest {
             IllegalArgumentException.class,
             () -> fileUploadService.handleFileUpload(file)
         );
-        
+
         assertEquals("File is empty", ex.getMessage());
     }
 
@@ -297,7 +233,7 @@ class FileUploadServiceTest {
             IllegalArgumentException.class,
             () -> fileUploadService.handleFileUpload(file)
         );
-        
+
         assertEquals("Filename is required", ex.getMessage());
     }
 
@@ -312,7 +248,7 @@ class FileUploadServiceTest {
             IllegalArgumentException.class,
             () -> fileUploadService.handleFileUpload(file)
         );
-        
+
         assertTrue(ex.getMessage().contains("Unsupported file format"));
     }
 
@@ -330,7 +266,7 @@ class FileUploadServiceTest {
             IllegalArgumentException.class,
             () -> fileUploadService.handleFileUpload(file)
         );
-        
+
         assertTrue(ex.getMessage().contains("exceeds maximum allowed size"));
     }
 
@@ -361,25 +297,41 @@ class FileUploadServiceTest {
             IllegalArgumentException.class,
             () -> fileUploadService.getProcessStatus(testTrackerId)
         );
-        
+
         assertTrue(ex.getMessage().contains("Tracker not found"));
     }
 
     // ==================== Helper Methods ====================
 
     private MultipartFile createMockFile(String filename, String content) {
+        return createMockFile(filename, content.getBytes());
+    }
+
+    private MultipartFile createMockFile(String filename, byte[] content) {
         MultipartFile file = mock(MultipartFile.class);
         lenient().when(file.isEmpty()).thenReturn(false);
         lenient().when(file.getOriginalFilename()).thenReturn(filename);
-        lenient().when(file.getSize()).thenReturn((long) content.length());
+        lenient().when(file.getSize()).thenReturn((long) content.length);
         try {
-            lenient().when(file.getBytes()).thenReturn(content.getBytes());
+            lenient().when(file.getBytes()).thenReturn(content);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
         return file;
     }
-    
+
+    private byte[] buildZip(Map<String, String> entries) throws IOException {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        try (ZipOutputStream zos = new ZipOutputStream(baos)) {
+            for (Map.Entry<String, String> entry : entries.entrySet()) {
+                zos.putNextEntry(new ZipEntry(entry.getKey()));
+                zos.write(entry.getValue().getBytes());
+                zos.closeEntry();
+            }
+        }
+        return baos.toByteArray();
+    }
+
     private JobQueue createMockJobQueue() {
         return JobQueue.builder()
                 .id(UUID.randomUUID())

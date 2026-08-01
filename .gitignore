@@ -48,6 +48,7 @@ package-lock.json
 *.iml
 *.ipr
 *.iws
+.metals/
 
 # OS
 .DS_Store

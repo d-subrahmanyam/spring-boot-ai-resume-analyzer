@@ -33,8 +33,9 @@ const ProcessTrackerTable = ({ trackers, onRefresh }: ProcessTrackerTableProps) 
   }
 
   const getProgress = (tracker: ProcessTracker) => {
-    if (tracker.totalFiles === 0) return 0
-    return Math.round((tracker.processedFiles / tracker.totalFiles) * 100)
+    if (tracker.status === 'COMPLETED') return 100
+    if (!tracker.totalFiles || tracker.totalFiles === 0) return 0
+    return Math.min(100, Math.max(0, Math.round((tracker.processedFiles / tracker.totalFiles) * 100)))
   }
 
   return (

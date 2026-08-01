@@ -1,8 +1,10 @@
 package io.subbu.ai.firedrill.services;
 
+import io.subbu.ai.firedrill.config.EnrichmentProperties;
 import io.subbu.ai.firedrill.entities.Candidate;
 import io.subbu.ai.firedrill.entities.CandidateMatch;
 import io.subbu.ai.firedrill.entities.JobRequirement;
+import io.subbu.ai.firedrill.entities.MatchAudit;
 import io.subbu.ai.firedrill.models.CandidateMatchResponse;
 import io.subbu.ai.firedrill.repos.CandidateMatchRepository;
 import io.subbu.ai.firedrill.repos.CandidateRepository;
@@ -23,6 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.lenient;
 
 /**
  * Unit tests for CandidateMatchingService.
@@ -44,6 +47,15 @@ class CandidateMatchingServiceTest {
     @Mock
     private AIService aiService;
 
+    @Mock
+    private MatchAuditService matchAuditService;
+
+    @Mock
+    private CandidateProfileEnrichmentService enrichmentService;
+
+    @Mock
+    private EnrichmentProperties enrichmentProps;
+
     @InjectMocks
     private CandidateMatchingService candidateMatchingService;
 
@@ -57,6 +69,13 @@ class CandidateMatchingServiceTest {
     void setUp() {
         candidateId = UUID.randomUUID();
         jobRequirementId = UUID.randomUUID();
+
+        EnrichmentProperties.MultiPassConfig disabledMultiPass = new EnrichmentProperties.MultiPassConfig();
+        disabledMultiPass.setEnabled(false);
+        lenient().when(enrichmentProps.isSourceSelectionEnabled()).thenReturn(false);
+        lenient().when(enrichmentProps.getMultiPass()).thenReturn(disabledMultiPass);
+        lenient().when(matchAuditService.createAudit(any(), any(), any()))
+                .thenReturn(MatchAudit.builder().id(UUID.randomUUID()).build());
 
         mockCandidate = Candidate.builder()
                 .id(candidateId)

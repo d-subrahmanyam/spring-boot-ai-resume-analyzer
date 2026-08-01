@@ -1,13 +1,12 @@
 package io.subbu.ai.firedrill.controllers;
 
-import io.subbu.ai.firedrill.config.JwtTokenProvider;
 import io.subbu.ai.firedrill.entities.JobQueue;
 import io.subbu.ai.firedrill.models.JobPriority;
 import io.subbu.ai.firedrill.models.JobStatus;
 import io.subbu.ai.firedrill.models.JobType;
+import io.subbu.ai.firedrill.pekko.ResumeProcessingEngine;
 import io.subbu.ai.firedrill.repositories.UserRepository;
 import io.subbu.ai.firedrill.services.JobQueueService;
-import io.subbu.ai.firedrill.services.JobSchedulerService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
@@ -32,7 +31,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(controllers = JobQueueController.class)
-@TestPropertySource(properties = {"app.scheduler.enabled=true"})
+@TestPropertySource(properties = {"app.pekko.enabled=true"})
 @WithMockUser(username = "testuser", roles = {"ADMIN"})
 class JobQueueControllerTest {
 
@@ -43,11 +42,11 @@ class JobQueueControllerTest {
     private JobQueueService jobQueueService;
 
     @MockBean
-    private JobSchedulerService jobSchedulerService;
-    
+    private ResumeProcessingEngine resumeProcessingEngine;
+
     @MockBean
-    private JwtTokenProvider jwtTokenProvider;
-    
+    private io.subbu.ai.firedrill.config.JwtTokenProvider jwtTokenProvider;
+
     @MockBean
     private UserRepository userRepository;
 
@@ -69,7 +68,7 @@ class JobQueueControllerTest {
         health.put("processingJobs", 3L);
         health.put("averageProcessingTime", 45.5);
 
-        when(jobSchedulerService.getQueueHealth()).thenReturn(health);
+        when(resumeProcessingEngine.getQueueHealth()).thenReturn(health);
 
         // Act & Assert
         mockMvc.perform(get("/api/jobs/health"))
@@ -79,7 +78,7 @@ class JobQueueControllerTest {
                 .andExpect(jsonPath("$.processingJobs").value(3))
                 .andExpect(jsonPath("$.averageProcessingTime").value(45.5));
 
-        verify(jobSchedulerService).getQueueHealth();
+        verify(resumeProcessingEngine).getQueueHealth();
     }
 
     @Test
@@ -92,7 +91,7 @@ class JobQueueControllerTest {
         when(jobQueueService.getJobCount(JobStatus.CANCELLED)).thenReturn(1L);
         when(jobQueueService.getQueueDepth(JobType.RESUME_PROCESSING)).thenReturn(10L);
         when(jobQueueService.getAverageProcessingDuration(JobType.RESUME_PROCESSING)).thenReturn(35.0);
-        when(jobSchedulerService.getActiveJobCount()).thenReturn(3);
+        when(resumeProcessingEngine.getActiveJobCount()).thenReturn(3);
 
         Map<JobStatus, Long> stats = new HashMap<>();
         stats.put(JobStatus.PENDING, 10L);

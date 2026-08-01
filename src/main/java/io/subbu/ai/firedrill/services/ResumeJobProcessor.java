@@ -149,8 +149,10 @@ public class ResumeJobProcessor {
 
             // Mark job as completed
             jobQueueService.markJobCompleted(jobId, result);
-            tracker.updateStatus(ProcessStatus.COMPLETED, "Resume processing completed successfully");
-            trackerRepository.save(tracker);
+
+            // Record this file as processed; batch-level COMPLETED only when all files are done
+            trackerRepository.recordProcessedFile(
+                    trackerId, ProcessStatus.COMPLETED, "Resume processing completed successfully");
 
             log.info("Resume job processing completed successfully: jobId={}, candidateId={}, duration={}s", 
                      jobId, candidate.getId(), 
@@ -193,19 +195,18 @@ public class ResumeJobProcessor {
             if (metadata != null && metadata.containsKey("trackerId")) {
                 String trackerIdStr = (String) metadata.get("trackerId");
                 UUID trackerId = UUID.fromString(trackerIdStr);
-                
-                ProcessTracker tracker = trackerRepository.findById(trackerId).orElse(null);
-                if (tracker != null) {
-                    String statusMessage = shouldRetry && job.canRetry() 
-                            ? String.format("Processing failed, will retry (attempt %d/%d): %s", 
-                                          job.getRetryCount() + 1, job.getMaxRetries(), errorMessage)
-                            : String.format("Processing failed permanently: %s", errorMessage);
-                    
-                    tracker.updateStatus(ProcessStatus.FAILED, statusMessage);
-                    tracker.incrementFailedFiles();
-                    trackerRepository.save(tracker);
-                    
-                    log.debug("Updated process tracker: trackerId={}, status=FAILED", trackerId);
+
+                boolean willRetry = shouldRetry && job.canRetry();
+                if (willRetry) {
+                    String retryMessage = String.format("Processing failed, will retry (attempt %d/%d): %s",
+                            job.getRetryCount() + 1, job.getMaxRetries(), errorMessage);
+                    trackerRepository.updateTrackerMessage(trackerId, retryMessage);
+                    log.debug("Updated process tracker message (will retry): trackerId={}", trackerId);
+                } else {
+                    String failureMessage = String.format("Processing failed permanently: %s", errorMessage);
+                    trackerRepository.recordFailedFile(
+                            trackerId, ProcessStatus.FAILED, failureMessage);
+                    log.debug("Recorded failed file on tracker: trackerId={}", trackerId);
                 }
             }
         } catch (Exception e) {

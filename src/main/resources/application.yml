@@ -12,7 +12,7 @@ spring:
   
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: none
     show-sql: false
     properties:
       hibernate:
@@ -21,6 +21,16 @@ spring:
         jdbc:
           lob:
             non_contextual_creation: true
+
+  # Flyway owns the schema. Migrations live in db/migration (V1 = schema,
+  # V2 = seed data). baseline-on-migrate lets existing pre-Flyway databases
+  # (tables created by the old ddl-auto: update) be baselined at V1 instead
+  # of wiped; V2 seeds are idempotent and run on both fresh and legacy DBs.
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    baseline-version: 1
+    locations: classpath:db/migration
   
   servlet:
     multipart:
@@ -99,22 +109,23 @@ app:
       borderline-min: 50
       borderline-max: 75
 
-  # Job Scheduler Configuration
-  # Set scheduler.enabled=true to use queue-based processing
-  # Set scheduler.enabled=false to use legacy async processing
-  scheduler:
-    enabled: ${SCHEDULER_ENABLED:false}  # Feature flag: true=scheduler, false=async
-    poll-interval-ms: ${SCHEDULER_POLL_INTERVAL:5000}  # How often to check for jobs (5 seconds)
-    initial-delay-ms: ${SCHEDULER_INITIAL_DELAY:10000}  # Wait before first poll (10 seconds)
-    batch-size: ${SCHEDULER_BATCH_SIZE:5}  # Max jobs to claim per poll
-    thread-pool-size: ${SCHEDULER_THREAD_POOL:5}  # Worker threads for job processing
-    worker-id: ${SCHEDULER_WORKER_ID:worker-1}  # Unique ID for this worker instance
-    stale-job-threshold-minutes: ${SCHEDULER_STALE_THRESHOLD:15}  # Jobs without heartbeat for 15 min = stale
-    stale-check-interval-ms: ${SCHEDULER_STALE_CHECK_INTERVAL:60000}  # Check for stale jobs every minute
-    stale-check-initial-delay-ms: ${SCHEDULER_STALE_CHECK_DELAY:30000}  # Wait 30s before first stale check
-    cleanup-cron: ${SCHEDULER_CLEANUP_CRON:0 0 2 * * ?}  # Cleanup old jobs daily at 2 AM
-    cleanup-retention-days: ${SCHEDULER_CLEANUP_RETENTION:30}  # Keep completed jobs for 30 days
-    metrics-log-interval-ms: ${SCHEDULER_METRICS_INTERVAL:300000}  # Log metrics every 5 minutes
+  # Apache Pekko Processing Configuration
+  # Resume uploads are enqueued to the job_queue table and consumed by a Pekko
+  # actor/stream pipeline (see io.subbu.ai.firedrill.pekko).
+  pekko:
+    enabled: ${PEKKO_ENABLED:true}  # Master switch for the Pekko pipeline
+    actor-system-name: resume-analyzer
+    worker-count: ${PEKKO_WORKERS:5}  # Number of worker actors processing jobs in parallel
+    poll-interval-ms: ${PEKKO_POLL_INTERVAL:5000}  # How often the polling stream checks for jobs (5 seconds)
+    initial-delay-ms: ${PEKKO_INITIAL_DELAY:10000}  # Wait before first poll (10 seconds)
+    claim-batch-size: ${PEKKO_CLAIM_BATCH:5}  # Max jobs to claim per poll
+    mailbox-capacity: ${PEKKO_MAILBOX_CAPACITY:100}  # Bound on outstanding buffered jobs (backpressure)
+    worker-id: ${PEKKO_WORKER_ID:worker-1}  # Unique ID for this worker instance
+    stale-job-threshold-minutes: ${PEKKO_STALE_THRESHOLD:15}  # Jobs without heartbeat for 15 min = stale
+    stale-check-interval-ms: ${PEKKO_STALE_CHECK_INTERVAL:60000}  # Check for stale jobs every minute
+    cleanup-cron: ${PEKKO_CLEANUP_CRON:0 0 2 * * ?}  # Cleanup old jobs daily at 2 AM
+    cleanup-retention-days: ${PEKKO_CLEANUP_RETENTION:30}  # Keep completed jobs for 30 days
+    metrics-log-interval-ms: ${PEKKO_METRICS_INTERVAL:300000}  # Log metrics every 5 minutes
 
 # Server Configuration
 server:

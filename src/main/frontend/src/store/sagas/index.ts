@@ -34,11 +34,9 @@ import type { ProcessTracker } from '@store/slices/uploadSlice'
 import type { CandidateExternalProfile, ExternalProfileSource } from '@store/slices/enrichmentSlice'
 
 // Helper to call graphql client with automatic token refresh on UNAUTHORIZED
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const gqlRequest = (query: any, variables?: any) => gqlRequestWithRefresh(query, variables)
 
 // Helper to map raw GraphQL CandidateMatch response (nested objects) to flat interface
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mapMatch = (m: any): CandidateMatch => ({
   ...m,
   candidateId: m.candidate?.id ?? m.candidateId ?? '',

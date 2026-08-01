@@ -118,6 +118,7 @@ class ResumeJobProcessorTest {
         verify(jobQueueService, atLeast(3)).updateHeartbeat(jobId);
         verify(jobQueueService).markJobCompleted(eq(jobId), anyMap());
         verify(trackerRepository, atLeast(3)).save(any(ProcessTracker.class));
+        verify(trackerRepository).recordProcessedFile(eq(trackerId), eq(ProcessStatus.COMPLETED), anyString());
     }
 
     @Test
@@ -183,6 +184,7 @@ class ResumeJobProcessorTest {
         verify(fileParserService).extractText(testFileData, "test-resume.pdf");
         verify(jobQueueService).markJobFailed(eq(jobId), contains("Unsupported file format"), eq(false));
         verify(trackerRepository, atLeast(1)).save(any(ProcessTracker.class));
+        verify(trackerRepository).recordFailedFile(eq(trackerId), eq(ProcessStatus.FAILED), contains("Unsupported file format"));
     }
 
     @Test
@@ -206,6 +208,7 @@ class ResumeJobProcessorTest {
         // Assert
         verify(aiService).analyzeResume(any(ResumeAnalysisRequest.class));
         verify(jobQueueService).markJobFailed(eq(jobId), contains("timeout"), eq(true));
+        verify(trackerRepository).updateTrackerMessage(eq(trackerId), contains("will retry"));
     }
 
     @Test
@@ -236,6 +239,7 @@ class ResumeJobProcessorTest {
         // Assert
         verify(embeddingService).generateAndStoreEmbeddings(any(Candidate.class), anyString());
         verify(jobQueueService).markJobFailed(eq(jobId), contains("Embedding"), eq(true));
+        verify(trackerRepository).updateTrackerMessage(eq(trackerId), contains("Embedding"));
     }
 
     @Test
@@ -255,6 +259,30 @@ class ResumeJobProcessorTest {
 
         // Assert
         verify(jobQueueService).markJobFailed(eq(jobId), anyString(), eq(true));
+        verify(trackerRepository).updateTrackerMessage(eq(trackerId), contains("will retry"));
+    }
+
+    @Test
+    void testProcessJob_RetriesExhausted_RecordsFailedFile() throws Exception {
+        // Arrange
+        mockJob.setRetryCount(3);
+
+        when(trackerRepository.findById(trackerId)).thenReturn(Optional.of(mockTracker));
+        when(trackerRepository.save(any(ProcessTracker.class))).thenReturn(mockTracker);
+
+        when(fileParserService.extractText(testFileData, "test-resume.pdf"))
+                .thenThrow(new java.net.SocketTimeoutException("Connection timeout"));
+
+        doNothing().when(jobQueueService).updateHeartbeat(jobId);
+        doNothing().when(jobQueueService).markJobFailed(eq(jobId), anyString(), anyBoolean());
+
+        // Act
+        resumeJobProcessor.processJob(mockJob);
+
+        // Assert
+        verify(jobQueueService).markJobFailed(eq(jobId), anyString(), eq(true));
+        verify(trackerRepository).recordFailedFile(eq(trackerId), eq(ProcessStatus.FAILED), contains("Connection timeout"));
+        verify(trackerRepository, never()).updateTrackerMessage(any(), any());
     }
 
     @Test
@@ -274,6 +302,8 @@ class ResumeJobProcessorTest {
 
         // Assert
         verify(jobQueueService).markJobFailed(eq(jobId), anyString(), eq(false));
+        verify(trackerRepository).recordFailedFile(eq(trackerId), eq(ProcessStatus.FAILED), contains("Invalid file data"));
+        verify(trackerRepository, never()).updateTrackerMessage(any(), any());
     }
 
     @Test

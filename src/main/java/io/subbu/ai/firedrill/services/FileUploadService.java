@@ -11,6 +11,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -19,14 +20,14 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
 /**
  * Service for handling file uploads.
- * Validates files, saves temporarily, and initiates processing.
- * 
- * Processing Mode:
- * - If app.scheduler.enabled=true: Creates jobs in queue for scheduler to process
- * - If app.scheduler.enabled=false: Uses async processing (legacy mode)
+ * Validates files and enqueues resume processing jobs into the job queue.
+ * The Apache Pekko pipeline (see io.subbu.ai.firedrill.pekko) consumes the jobs
+ * and runs the parsing / AI analysis / embedding pipeline.
  */
 @Service
 @RequiredArgsConstructor
@@ -34,7 +35,6 @@ import java.util.UUID;
 public class FileUploadService {
 
     private final FileParserService fileParserService;
-    private final ResumeProcessingService resumeProcessingService;
     private final ProcessTrackerRepository trackerRepository;
     private final JobQueueService jobQueueService;
 
@@ -44,20 +44,16 @@ public class FileUploadService {
     @Value("${app.upload.allowed-extensions:.doc,.docx,.pdf}")
     private String allowedExtensions;
 
-    @Value("${app.scheduler.enabled:false}")
-    private boolean schedulerEnabled;
-
-
     /**
      * Handle multiple file upload.
-     * Creates a process tracker and initiates processing (async or scheduler-based).
-     * 
+     * Creates a process tracker and enqueues one job per file (or per ZIP entry).
+     *
      * @param files List of uploaded files
      * @return UUID of the process tracker
      * @throws IOException if file operations fail
      */
     public UUID handleMultipleFileUpload(List<MultipartFile> files) throws IOException {
-        log.info("Handling multiple file upload, count: {}, schedulerMode={}", files.size(), schedulerEnabled);
+        log.info("Handling multiple file upload, count: {}", files.size());
 
         if (files.isEmpty()) {
             throw new IllegalArgumentException("No files provided");
@@ -82,72 +78,47 @@ public class FileUploadService {
         String correlationId = "batch-" + tracker.getId().toString();
         tracker.setCorrelationId(correlationId);
         trackerRepository.save(tracker);
-        
+
         log.info("Created process tracker for batch: {}, correlationId={}", tracker.getId(), correlationId);
 
-        if (schedulerEnabled) {
-            // SCHEDULER MODE: Create jobs for each file
-            log.info("Using scheduler mode for batch upload: {} files", files.size());
-            
-            for (MultipartFile file : files) {
-                byte[] fileData = file.getBytes();
-                String filename = file.getOriginalFilename();
-                
-                // Create job metadata
-                Map<String, Object> metadata = new HashMap<>();
-                metadata.put("filename", filename);
-                metadata.put("trackerId", tracker.getId().toString());
-                metadata.put("uploadedAt", java.time.LocalDateTime.now().toString());
-                metadata.put("fileSize", fileData.length);
-                
-                // Create job in queue
-                jobQueueService.createJob(
-                    JobType.RESUME_PROCESSING,
-                    fileData,
-                    metadata,
-                    JobPriority.NORMAL,
-                    correlationId
-                );
-                
-                log.debug("Job created for file: filename={}, trackerId={}", filename, tracker.getId());
-            }
-            
-            tracker.updateStatus(ProcessStatus.INITIATED, 
-                String.format("Created %d jobs in queue for processing", files.size()));
-            trackerRepository.save(tracker);
-            
-            log.info("Created {} jobs in queue for batch upload", files.size());
-            
+        // A single ZIP upload is expanded into one job per contained resume.
+        boolean singleZip = files.size() == 1 && isZip(files.get(0).getOriginalFilename());
+
+        int jobCount;
+        if (singleZip) {
+            MultipartFile zip = files.get(0);
+            jobCount = createJobsFromZip(zip.getBytes(), zip.getOriginalFilename(), tracker.getId(), correlationId);
+            tracker.setTotalFiles(jobCount);
         } else {
-            // ASYNC MODE: Process using legacy async service
-            log.info("Using async mode for batch upload: {} files", files.size());
-            
-            // Read file data
-            List<byte[]> fileDataList = new java.util.ArrayList<>();
-            List<String> filenames = new java.util.ArrayList<>();
-
+            jobCount = 0;
             for (MultipartFile file : files) {
-                fileDataList.add(file.getBytes());
-                filenames.add(file.getOriginalFilename());
+                createResumeJob(file.getBytes(), file.getOriginalFilename(), tracker.getId(), correlationId);
+                jobCount++;
             }
-
-            // Process resumes asynchronously
-            resumeProcessingService.processMultipleResumes(fileDataList, filenames, tracker.getId());
         }
 
+        if (jobCount == 0) {
+            tracker.updateStatus(ProcessStatus.FAILED, "No supported files found in the ZIP archive");
+        } else {
+            tracker.updateStatus(ProcessStatus.INITIATED,
+                    String.format("Created %d job(s) in queue for processing", jobCount));
+        }
+        trackerRepository.save(tracker);
+
+        log.info("Created {} jobs in queue for batch upload", jobCount);
         return tracker.getId();
     }
 
     /**
      * Handle single or ZIP file upload.
-     * Creates a process tracker and initiates processing (async or scheduler-based).
-     * 
+     * Creates a process tracker and enqueues a resume processing job.
+     *
      * @param file Uploaded file
      * @return UUID of the process tracker
      * @throws IOException if file operations fail
      */
     public UUID handleFileUpload(MultipartFile file) throws IOException {
-        log.info("Handling file upload: {}, schedulerMode={}", file.getOriginalFilename(), schedulerEnabled);
+        log.info("Handling file upload: {}", file.getOriginalFilename());
 
         // Validate file
         validateFile(file);
@@ -172,70 +143,92 @@ public class FileUploadService {
         String correlationId = "upload-" + tracker.getId().toString();
         tracker.setCorrelationId(correlationId);
         trackerRepository.save(tracker);
-        
+
         log.info("Created process tracker: {}, correlationId={}", tracker.getId(), correlationId);
 
-        // Read file data
         byte[] fileData = file.getBytes();
         String filename = file.getOriginalFilename();
 
-        if (schedulerEnabled) {
-            // SCHEDULER MODE: Create job in queue
-            log.info("Using scheduler mode for file upload: {}", filename);
-            
-            // Determine if ZIP or single file
-            boolean isZip = filename != null && filename.toLowerCase().endsWith(".zip");
-            
-            if (isZip) {
-                // TODO: Handle ZIP files in scheduler mode
-                // For now, fall back to async processing for ZIP files
-                log.warn("ZIP file processing not yet implemented in scheduler mode: {}, using async", filename);
-                resumeProcessingService.processZipFile(fileData, filename, tracker.getId());
-            } else {
-                // Create job metadata
-                Map<String, Object> metadata = new HashMap<>();
-                metadata.put("filename", filename);
-                metadata.put("trackerId", tracker.getId().toString());
-                metadata.put("uploadedAt", java.time.LocalDateTime.now().toString());
-                metadata.put("fileSize", fileData.length);
-                
-                // Create job in queue
-                jobQueueService.createJob(
-                    JobType.RESUME_PROCESSING,
-                    fileData,
-                    metadata,
-                    JobPriority.NORMAL,
-                    correlationId
-                );
-                
-                tracker.updateStatus(ProcessStatus.INITIATED, "Job created in queue for processing");
-                trackerRepository.save(tracker);
-                
-                log.info("Job created in queue: filename={}, trackerId={}, jobId will be assigned by scheduler", 
-                         filename, tracker.getId());
-            }
-            
+        int jobCount;
+        if (isZip(filename)) {
+            jobCount = createJobsFromZip(fileData, filename, tracker.getId(), correlationId);
+            tracker.setTotalFiles(jobCount);
         } else {
-            // ASYNC MODE: Process using legacy async service
-            log.info("Using async mode for file upload: {}", filename);
-            
-            // Determine if ZIP or single file
-            if (filename != null && filename.toLowerCase().endsWith(".zip")) {
-                // Process ZIP file asynchronously
-                resumeProcessingService.processZipFile(fileData, filename, tracker.getId());
-            } else {
-                // Process single resume asynchronously
-                resumeProcessingService.processSingleResume(fileData, filename, tracker.getId());
-            }
+            createResumeJob(fileData, filename, tracker.getId(), correlationId);
+            jobCount = 1;
         }
 
+        if (jobCount == 0) {
+            tracker.updateStatus(ProcessStatus.FAILED, "No supported files found in the ZIP archive");
+        } else {
+            tracker.updateStatus(ProcessStatus.INITIATED,
+                    String.format("Created %d job(s) in queue for processing", jobCount));
+        }
+        trackerRepository.save(tracker);
+
+        log.info("Created {} job(s) in queue: filename={}, trackerId={}", jobCount, filename, tracker.getId());
         return tracker.getId();
+    }
+
+    /**
+     * Expand a ZIP upload into one resume processing job per supported file.
+     *
+     * @param zipData Binary ZIP content
+     * @param zipFilename Original ZIP filename
+     * @param trackerId Process tracker ID
+     * @param correlationId Correlation ID for the upload batch
+     * @return Number of jobs created
+     * @throws IOException if the ZIP cannot be read
+     */
+    private int createJobsFromZip(byte[] zipData, String zipFilename, UUID trackerId, String correlationId)
+            throws IOException {
+        log.info("Expanding ZIP upload: {}", zipFilename);
+
+        int jobCount = 0;
+        try (ZipInputStream zipInputStream = new ZipInputStream(new ByteArrayInputStream(zipData))) {
+            ZipEntry entry;
+            while ((entry = zipInputStream.getNextEntry()) != null) {
+                if (entry.isDirectory()) {
+                    continue;
+                }
+                String entryName = entry.getName();
+                if (!fileParserService.isValidFileFormat(entryName)) {
+                    log.warn("Skipping unsupported file in ZIP: {}", entryName);
+                    continue;
+                }
+                byte[] entryData = zipInputStream.readAllBytes();
+                createResumeJob(entryData, entryName, trackerId, correlationId);
+                jobCount++;
+            }
+        }
+        log.info("Created {} jobs from ZIP: {}", jobCount, zipFilename);
+        return jobCount;
+    }
+
+    /**
+     * Enqueue a single resume processing job.
+     */
+    private void createResumeJob(byte[] fileData, String filename, UUID trackerId, String correlationId) {
+        Map<String, Object> metadata = new HashMap<>();
+        metadata.put("filename", filename);
+        metadata.put("trackerId", trackerId.toString());
+        metadata.put("uploadedAt", java.time.LocalDateTime.now().toString());
+        metadata.put("fileSize", fileData.length);
+
+        jobQueueService.createJob(
+                JobType.RESUME_PROCESSING,
+                fileData,
+                metadata,
+                JobPriority.NORMAL,
+                correlationId
+        );
+        log.debug("Job created for file: filename={}, trackerId={}", filename, trackerId);
     }
 
     /**
      * Validate uploaded file.
      * Checks file size, extension, and content.
-     * 
+     *
      * @param file Uploaded file
      * @throws IllegalArgumentException if validation fails
      */
@@ -251,15 +244,13 @@ public class FileUploadService {
 
         // Check if ZIP or allowed resume format
         boolean isZip = filename.toLowerCase().endsWith(".zip");
-        boolean isValidFormat = fileParserService.isValidFileFormat(filename);
-
-        if (!isZip && !isValidFormat) {
+        if (!isZip && !fileParserService.isValidFileFormat(filename)) {
             throw new IllegalArgumentException(
                 "Unsupported file format. Allowed formats: " + allowedExtensions + ", .zip"
             );
         }
 
-        // Check file size (already handled by Spring Boot multipart config, 
+        // Check file size (already handled by Spring Boot multipart config,
         // but we can add custom validation here)
         long maxSize = 50 * 1024 * 1024; // 50 MB
         if (file.getSize() > maxSize) {
@@ -273,12 +264,16 @@ public class FileUploadService {
 
     /**
      * Get process tracker by ID.
-     * 
+     *
      * @param trackerId Tracker UUID
      * @return Process tracker
      */
     public ProcessTracker getProcessStatus(UUID trackerId) {
         return trackerRepository.findById(trackerId)
                 .orElseThrow(() -> new IllegalArgumentException("Tracker not found: " + trackerId));
+    }
+
+    private boolean isZip(String filename) {
+        return filename != null && filename.toLowerCase().endsWith(".zip");
     }
 }

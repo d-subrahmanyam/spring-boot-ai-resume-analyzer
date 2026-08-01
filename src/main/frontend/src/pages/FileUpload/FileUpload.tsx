@@ -1,30 +1,60 @@
 import { useState, useRef, useEffect } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { uploadFiles, fetchProcessStatus, clearTracker, fetchRecentTrackers } from '@/store/slices/uploadSlice'
+import type { ProcessTracker } from '@/store/slices/uploadSlice'
 import { RootState } from '@/store'
 import ProcessTrackerTable from '@/components/ProcessTrackerTable/ProcessTrackerTable'
 import styles from './FileUpload.module.css'
+
+const POLL_INTERVAL_MS = 2000
+const MAX_POLL_DURATION_MS = 5 * 60 * 1000
 
 const FileUpload = () => {
   const dispatch = useDispatch()
   const { uploading, tracker, trackers, error } = useSelector((state: RootState) => state.upload)
   const [files, setFiles] = useState<File[]>([])
   const [dragging, setDragging] = useState(false)
+  const [pollTimedOut, setPollTimedOut] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const pollIntervalRef = useRef<NodeJS.Timeout>()
+  const pollStartRef = useRef<{ trackerId: string; startedAt: number }>({ trackerId: '', startedAt: 0 })
 
   // Fetch recent trackers on mount
   useEffect(() => {
     dispatch(fetchRecentTrackers(24)) // Fetch trackers from last 24 hours
   }, [dispatch])
 
-  // Poll tracker status if processing
+  // Poll tracker status if processing, with a timeout safety net
   useEffect(() => {
-    if (tracker && tracker.status !== 'COMPLETED' && tracker.status !== 'FAILED') {
-      pollIntervalRef.current = setInterval(() => {
-        dispatch(fetchProcessStatus(tracker.id))
-      }, 2000)
+    const isActive = tracker && tracker.status !== 'COMPLETED' && tracker.status !== 'FAILED'
+
+    if (!isActive) {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current)
+      }
+      return
     }
+
+    if (pollStartRef.current.trackerId !== tracker.id) {
+      pollStartRef.current = { trackerId: tracker.id, startedAt: Date.now() }
+      setPollTimedOut(false)
+    }
+
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current)
+    }
+
+    pollIntervalRef.current = setInterval(() => {
+      if (Date.now() - pollStartRef.current.startedAt >= MAX_POLL_DURATION_MS) {
+        if (pollIntervalRef.current) {
+          clearInterval(pollIntervalRef.current)
+        }
+        setPollTimedOut(true)
+        return
+      }
+      dispatch(fetchProcessStatus(tracker.id))
+    }, POLL_INTERVAL_MS)
+
     return () => {
       if (pollIntervalRef.current) {
         clearInterval(pollIntervalRef.current)
@@ -84,6 +114,12 @@ const FileUpload = () => {
     return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i]
   }
 
+  const getProgress = (tracker: ProcessTracker) => {
+    if (tracker.status === 'COMPLETED') return 100
+    if (!tracker.totalFiles || tracker.totalFiles === 0) return 0
+    return Math.min(100, Math.max(0, Math.round((tracker.processedFiles / tracker.totalFiles) * 100)))
+  }
+
   const getStatusClass = (status: string) => {
     switch (status) {
       case 'INITIATED':
@@ -115,10 +151,8 @@ const FileUpload = () => {
                 {tracker.status.replace(/_/g, ' ')}
               </span>
               <div className={styles.progressBar}>
-                <div className={styles.progressFill} style={{ 
-                  width: `${tracker.totalFiles > 0 ? Math.round((tracker.processedFiles / tracker.totalFiles) * 100) : 0}%` 
-                }}>
-                  {tracker.totalFiles > 0 ? Math.round((tracker.processedFiles / tracker.totalFiles) * 100) : 0}%
+                <div className={styles.progressFill} style={{ width: `${getProgress(tracker)}%` }}>
+                  {getProgress(tracker)}%
                 </div>
               </div>
               <div className={styles.stats}>
@@ -139,6 +173,11 @@ const FileUpload = () => {
             {tracker.message && (
               <p style={{ color: '#f56565', marginTop: '1rem' }}>
                 {tracker.message}
+              </p>
+            )}
+            {pollTimedOut && (
+              <p style={{ color: '#f56565', marginTop: '1rem' }}>
+                Status polling timed out after 5 minutes. Refresh the page to check for updates.
               </p>
             )}
             {(tracker.status === 'COMPLETED' || tracker.status === 'FAILED') && (

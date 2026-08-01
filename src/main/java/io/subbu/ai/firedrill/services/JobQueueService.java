@@ -31,10 +31,10 @@ public class JobQueueService {
 
     private final JobQueueRepository jobQueueRepository;
 
-    @Value("${app.scheduler.stale-job-threshold-minutes:15}")
+    @Value("${app.pekko.stale-job-threshold-minutes:15}")
     private int staleJobThresholdMinutes;
 
-    @Value("${app.scheduler.worker-id:default-worker}")
+    @Value("${app.pekko.worker-id:default-worker}")
     private String workerId;
 
     /**

@@ -92,7 +92,6 @@ function isUnauthorizedError(error: unknown): boolean {
   if (error instanceof ClientError) {
     const errors = error.response?.errors ?? []
     return errors.some(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (e: any) =>
         e?.extensions?.classification === 'UNAUTHORIZED' ||
         e?.message === 'Unauthorized' ||
@@ -106,7 +105,6 @@ function isUnauthorizedError(error: unknown): boolean {
  * Execute a GraphQL request with automatic token refresh on UNAUTHORIZED errors.
  * Falls back to redirecting to /login if refresh fails.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function gqlRequestWithRefresh<T = any>(
   query: string,
   variables?: Record<string, unknown>

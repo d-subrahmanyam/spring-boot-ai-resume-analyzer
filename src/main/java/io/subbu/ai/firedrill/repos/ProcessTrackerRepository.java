@@ -3,7 +3,9 @@ package io.subbu.ai.firedrill.repos;
 import io.subbu.ai.firedrill.entities.ProcessTracker;
 import io.subbu.ai.firedrill.models.ProcessStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
@@ -57,4 +59,69 @@ public interface ProcessTrackerRepository extends JpaRepository<ProcessTracker, 
      */
     @Query("SELECT pt FROM ProcessTracker pt ORDER BY pt.createdAt DESC")
     List<ProcessTracker> findAllOrderByCreatedAtDesc();
+
+    /**
+     * Atomically record a successfully processed file and complete the batch when all files are done.
+     * Uses a single bulk UPDATE (row-locked) so concurrent workers cannot lose increments.
+     *
+     * @param trackerId The tracker id to update
+     * @return the number of rows updated (1 if the tracker exists)
+     */
+    @Modifying
+    @Query("""
+            UPDATE ProcessTracker t SET
+              t.status = CASE WHEN COALESCE(t.processedFiles, 0) + 1 + COALESCE(t.failedFiles, 0) >= COALESCE(t.totalFiles, 0)
+                              THEN :completedStatus ELSE t.status END,
+              t.message = CASE WHEN COALESCE(t.processedFiles, 0) + 1 + COALESCE(t.failedFiles, 0) >= COALESCE(t.totalFiles, 0)
+                               THEN :completedMessage ELSE t.message END,
+              t.completedAt = CASE WHEN COALESCE(t.processedFiles, 0) + 1 + COALESCE(t.failedFiles, 0) >= COALESCE(t.totalFiles, 0)
+                                   THEN CURRENT_TIMESTAMP ELSE t.completedAt END,
+              t.updatedAt = CURRENT_TIMESTAMP,
+              t.processedFiles = COALESCE(t.processedFiles, 0) + 1
+            WHERE t.id = :trackerId
+            """)
+    int recordProcessedFile(@Param("trackerId") UUID trackerId,
+                            @Param("completedStatus") ProcessStatus completedStatus,
+                            @Param("completedMessage") String completedMessage);
+
+    /**
+     * Atomically record a permanently failed file and complete the batch when all files are done.
+     *
+     * @param trackerId The tracker id to update
+     * @param failedStatus The status to set when the batch is complete (typically {@code ProcessStatus.FAILED})
+     * @param failureMessage The failure message to set when the batch is complete
+     * @return the number of rows updated (1 if the tracker exists)
+     */
+    @Modifying
+    @Query("""
+            UPDATE ProcessTracker t SET
+              t.status = CASE WHEN COALESCE(t.processedFiles, 0) + COALESCE(t.failedFiles, 0) + 1 >= COALESCE(t.totalFiles, 0)
+                              THEN :failedStatus ELSE t.status END,
+              t.message = CASE WHEN COALESCE(t.processedFiles, 0) + COALESCE(t.failedFiles, 0) + 1 >= COALESCE(t.totalFiles, 0)
+                               THEN :failureMessage ELSE t.message END,
+              t.completedAt = CASE WHEN COALESCE(t.processedFiles, 0) + COALESCE(t.failedFiles, 0) + 1 >= COALESCE(t.totalFiles, 0)
+                                   THEN CURRENT_TIMESTAMP ELSE t.completedAt END,
+              t.updatedAt = CURRENT_TIMESTAMP,
+              t.failedFiles = COALESCE(t.failedFiles, 0) + 1
+            WHERE t.id = :trackerId
+            """)
+    int recordFailedFile(@Param("trackerId") UUID trackerId,
+                         @Param("failedStatus") ProcessStatus failedStatus,
+                         @Param("failureMessage") String failureMessage);
+
+    /**
+     * Update only the tracker message (non-terminal) for a transient failure that will be retried.
+     *
+     * @param trackerId The tracker id to update
+     * @param message The new message
+     * @return the number of rows updated (1 if the tracker exists)
+     */
+    @Modifying
+    @Query("""
+            UPDATE ProcessTracker t SET
+              t.message = :message,
+              t.updatedAt = CURRENT_TIMESTAMP
+            WHERE t.id = :trackerId
+            """)
+    int updateTrackerMessage(@Param("trackerId") UUID trackerId, @Param("message") String message);
 }

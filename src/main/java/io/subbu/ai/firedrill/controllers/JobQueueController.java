@@ -3,8 +3,8 @@ package io.subbu.ai.firedrill.controllers;
 import io.subbu.ai.firedrill.entities.JobQueue;
 import io.subbu.ai.firedrill.models.JobStatus;
 import io.subbu.ai.firedrill.models.JobType;
+import io.subbu.ai.firedrill.pekko.ResumeProcessingEngine;
 import io.subbu.ai.firedrill.services.JobQueueService;
-import io.subbu.ai.firedrill.services.JobSchedulerService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -22,17 +22,17 @@ import java.util.UUID;
 /**
  * REST controller for job queue monitoring and management.
  * Provides endpoints for queue statistics, job details, and manual operations.
- * Only active when scheduler is enabled.
+ * Only active when the Pekko pipeline is enabled.
  */
 @Slf4j
 @RestController
 @RequestMapping("/api/jobs")
 @RequiredArgsConstructor
-@ConditionalOnProperty(name = "app.scheduler.enabled", havingValue = "true", matchIfMissing = false)
+@ConditionalOnProperty(name = "app.pekko.enabled", havingValue = "true", matchIfMissing = true)
 public class JobQueueController {
 
     private final JobQueueService jobQueueService;
-    private final JobSchedulerService jobSchedulerService;
+    private final ResumeProcessingEngine resumeProcessingEngine;
 
     /**
      * Get queue health summary.
@@ -43,7 +43,7 @@ public class JobQueueController {
     public ResponseEntity<Map<String, Object>> getQueueHealth() {
         log.debug("API: Get queue health");
         
-        Map<String, Object> health = jobSchedulerService.getQueueHealth();
+        Map<String, Object> health = resumeProcessingEngine.getQueueHealth();
         
         log.debug("Queue health retrieved: {}", health);
         return ResponseEntity.ok(health);
@@ -74,7 +74,7 @@ public class JobQueueController {
         stats.put("averageProcessingDuration", jobQueueService.getAverageProcessingDuration(JobType.RESUME_PROCESSING));
         
         // Active workers
-        stats.put("activeWorkers", jobSchedulerService.getActiveJobCount());
+        stats.put("activeWorkers", resumeProcessingEngine.getActiveJobCount());
         
         // Job statistics by type
         Map<JobStatus, Long> jobStats = jobQueueService.getJobStats(JobType.RESUME_PROCESSING);

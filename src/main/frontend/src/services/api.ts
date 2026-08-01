@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { axiosInstance } from './axiosInstance'
 
 const api = axios.create({
   baseURL: '/api',
@@ -23,6 +24,18 @@ export interface ProcessStatusResponse {
   message?: string
 }
 
+export interface JobQueueStats {
+  pendingCount: number
+  processingCount: number
+  completedCount: number
+  failedCount: number
+  cancelledCount: number
+  queueDepth: number
+  averageProcessingDuration: number
+  activeWorkers: number
+  jobStatsByStatus: Record<string, number>
+}
+
 export const uploadResumes = async (files: File[]): Promise<UploadResponse> => {
   const formData = new FormData()
   files.forEach((file) => {
@@ -35,6 +48,11 @@ export const uploadResumes = async (files: File[]): Promise<UploadResponse> => {
 
 export const getProcessStatus = async (trackerId: string): Promise<ProcessStatusResponse> => {
   const response = await api.get<ProcessStatusResponse>(`/upload/status/${trackerId}`)
+  return response.data
+}
+
+export const getJobQueueStats = async (): Promise<JobQueueStats> => {
+  const response = await axiosInstance.get<JobQueueStats>('/api/jobs/stats')
   return response.data
 }
 
