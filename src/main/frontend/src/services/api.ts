@@ -34,7 +34,9 @@ export const uploadResumes = async (files: File[]): Promise<UploadResponse> => {
     formData.append('files', file)
   })
 
-  const response = await axiosInstance.post<UploadResponse>('/api/upload/resume', formData)
+  const response = await axiosInstance.post<UploadResponse>('/api/upload/resume', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
   return response.data
 }
 

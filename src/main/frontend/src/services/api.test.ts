@@ -13,9 +13,11 @@ afterAll(() => server.close());
 
 describe('API Service', () => {
   describe('File Upload', () => {
-    it('should upload resume files', async () => {
+    it('should upload resume files as multipart form data', async () => {
+      let requestContentType: string | null = null;
       server.use(
-        http.post('http://localhost:8080/api/upload/resume', () => {
+        http.post('http://localhost:8080/api/upload/resume', ({ request }) => {
+          requestContentType = request.headers.get('content-type');
           return HttpResponse.json(mockUploadResponse);
         })
       );
@@ -23,6 +25,10 @@ describe('API Service', () => {
       const files = [new File(['resume content'], 'resume.pdf', { type: 'application/pdf' })];
       const response = await uploadResumes(files);
       
+      // Guard against axios JSON-serializing FormData (which breaks the
+      // backend's multipart parsing). jsdom sends text/plain; a real browser
+      // sends multipart/form-data; boundary=..., so assert it is NOT JSON.
+      expect(requestContentType).not.toMatch(/application\/json/);
       expect(response.trackerId).toBe(mockUploadResponse.trackerId);
       expect(response.message).toBe(mockUploadResponse.message);
     });
