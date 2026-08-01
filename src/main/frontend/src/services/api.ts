@@ -1,12 +1,4 @@
-import axios from 'axios'
 import { axiosInstance } from './axiosInstance'
-
-const api = axios.create({
-  baseURL: '/api',
-  headers: {
-    'Content-Type': 'multipart/form-data',
-  },
-})
 
 export interface UploadResponse {
   trackerId: string
@@ -42,12 +34,12 @@ export const uploadResumes = async (files: File[]): Promise<UploadResponse> => {
     formData.append('files', file)
   })
 
-  const response = await api.post<UploadResponse>('/upload/resume', formData)
+  const response = await axiosInstance.post<UploadResponse>('/api/upload/resume', formData)
   return response.data
 }
 
 export const getProcessStatus = async (trackerId: string): Promise<ProcessStatusResponse> => {
-  const response = await api.get<ProcessStatusResponse>(`/upload/status/${trackerId}`)
+  const response = await axiosInstance.get<ProcessStatusResponse>(`/api/upload/status/${trackerId}`)
   return response.data
 }
 
@@ -55,5 +47,3 @@ export const getJobQueueStats = async (): Promise<JobQueueStats> => {
   const response = await axiosInstance.get<JobQueueStats>('/api/jobs/stats')
   return response.data
 }
-
-export default api

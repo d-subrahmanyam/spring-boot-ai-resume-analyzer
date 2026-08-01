@@ -15,7 +15,7 @@ describe('API Service', () => {
   describe('File Upload', () => {
     it('should upload resume files', async () => {
       server.use(
-        http.post('/api/upload/resume', () => {
+        http.post('http://localhost:8080/api/upload/resume', () => {
           return HttpResponse.json(mockUploadResponse);
         })
       );
@@ -29,7 +29,7 @@ describe('API Service', () => {
 
     it('should handle upload errors', async () => {
       server.use(
-        http.post('/api/upload/resume', () => {
+        http.post('http://localhost:8080/api/upload/resume', () => {
           return HttpResponse.json(
             { error: 'File too large' },
             { status: 400 }
@@ -44,7 +44,7 @@ describe('API Service', () => {
 
     it('should handle multiple files upload', async () => {
       server.use(
-        http.post('/api/upload/resume', () => {
+        http.post('http://localhost:8080/api/upload/resume', () => {
           return HttpResponse.json(mockUploadResponse);
         })
       );
@@ -73,7 +73,7 @@ describe('API Service', () => {
       };
       
       server.use(
-        http.get(`/api/upload/status/${trackerId}`, () => {
+        http.get(`http://localhost:8080/api/upload/status/${trackerId}`, () => {
           return HttpResponse.json(statusResponse);
         })
       );
@@ -86,7 +86,7 @@ describe('API Service', () => {
 
     it('should handle status check errors', async () => {
       server.use(
-        http.get('/api/upload/status/invalid', () => {
+        http.get('http://localhost:8080/api/upload/status/invalid', () => {
           return HttpResponse.json(
             { error: 'Tracker not found' },
             { status: 404 }
@@ -101,7 +101,7 @@ describe('API Service', () => {
   describe('Error Handling', () => {
     it('should handle network errors', async () => {
       server.use(
-        http.post('/api/upload/resume', () => {
+        http.post('http://localhost:8080/api/upload/resume', () => {
           return HttpResponse.error();
         })
       );
@@ -113,7 +113,7 @@ describe('API Service', () => {
 
     it('should handle timeout', async () => {
       server.use(
-        http.get('/api/upload/status/slow', async () => {
+        http.get('http://localhost:8080/api/upload/status/slow', async () => {
           await new Promise((resolve) => setTimeout(resolve, 100));
           const statusResponse = {
             id: 'slow',
