@@ -30,6 +30,7 @@ const JobRequirements = () => {
   const canManageJobs = useSelector(selectCanManageJobs)
   const isAdmin = useSelector(selectIsAdmin)
   const [showForm, setShowForm] = useState(false)
+  const [confirmAction, setConfirmAction] = useState<'load' | 'remove' | null>(null)
   const [sampleLoading, setSampleLoading] = useState(false)
   const [sampleMessage, setSampleMessage] = useState<string | null>(null)
   const [sampleError, setSampleError] = useState<string | null>(null)
@@ -121,48 +122,40 @@ const JobRequirements = () => {
     }
   }
 
-  const handleLoadSampleJobs = async () => {
-    if (!confirm('Load the sample job requirements? Existing sample titles will be skipped.')) {
-      return
-    }
-    setSampleLoading(true)
-    setSampleError(null)
-    setSampleMessage(null)
-    try {
-      const data: { loadSampleJobRequirements: JobRequirement[] } = await graphqlClient.request(
-        LOAD_SAMPLE_JOBS
-      )
-      dispatch(fetchJobs())
-      const count = data.loadSampleJobRequirements.length
-      setSampleMessage(
-        count > 0 ? `Loaded ${count} sample job requirement(s).` : 'Sample jobs already loaded.'
-      )
-    } catch (error) {
-      setSampleError(`Failed to load sample jobs: ${errorMessage(error)}`)
-    } finally {
-      setSampleLoading(false)
-    }
+  const handleLoadSampleJobs = () => {
+    setConfirmAction('load')
   }
 
-  const handleRemoveSampleJobs = async () => {
-    if (
-      !confirm(
-        'Remove all sample job requirements? This deletes the sample jobs and their matches. This cannot be undone.'
-      )
-    ) {
-      return
-    }
+  const handleRemoveSampleJobs = () => {
+    setConfirmAction('remove')
+  }
+
+  const runSampleAction = async (action: 'load' | 'remove') => {
+    setConfirmAction(null)
     setSampleLoading(true)
     setSampleError(null)
     setSampleMessage(null)
     try {
-      const data: { removeSampleJobRequirements: number } = await graphqlClient.request(
-        REMOVE_SAMPLE_JOBS
-      )
-      dispatch(fetchJobs())
-      setSampleMessage(`Removed ${data.removeSampleJobRequirements} sample job requirement(s).`)
+      if (action === 'load') {
+        const data: { loadSampleJobRequirements: JobRequirement[] } = await graphqlClient.request(
+          LOAD_SAMPLE_JOBS
+        )
+        dispatch(fetchJobs())
+        const count = data.loadSampleJobRequirements.length
+        setSampleMessage(
+          count > 0 ? `Loaded ${count} sample job requirement(s).` : 'Sample jobs already loaded.'
+        )
+      } else {
+        const data: { removeSampleJobRequirements: number } = await graphqlClient.request(
+          REMOVE_SAMPLE_JOBS
+        )
+        dispatch(fetchJobs())
+        setSampleMessage(`Removed ${data.removeSampleJobRequirements} sample job requirement(s).`)
+      }
     } catch (error) {
-      setSampleError(`Failed to remove sample jobs: ${errorMessage(error)}`)
+      setSampleError(
+        `Failed to ${action === 'load' ? 'load' : 'remove'} sample jobs: ${errorMessage(error)}`
+      )
     } finally {
       setSampleLoading(false)
     }
@@ -405,6 +398,40 @@ const JobRequirements = () => {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Sample Jobs Confirmation Modal */}
+      {confirmAction && (
+        <div className={styles.confirmOverlay} onClick={() => setConfirmAction(null)}>
+          <div className={styles.confirmModal} onClick={(e) => e.stopPropagation()}>
+            <h3>{confirmAction === 'load' ? 'Load Sample Jobs?' : 'Remove Sample Jobs?'}</h3>
+            <p>
+              {confirmAction === 'load'
+                ? 'Load the curated sample job requirements? Existing sample titles will be skipped.'
+                : 'Remove all sample job requirements? This deletes the sample jobs and their matches. This cannot be undone.'}
+            </p>
+            <div className={styles.confirmActions}>
+              <button
+                type="button"
+                className={styles.cancelButton}
+                onClick={() => setConfirmAction(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className={
+                  confirmAction === 'remove'
+                    ? styles.removeConfirmButton
+                    : styles.loadConfirmButton
+                }
+                onClick={() => runSampleAction(confirmAction)}
+              >
+                {confirmAction === 'load' ? 'Load' : 'Remove'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
