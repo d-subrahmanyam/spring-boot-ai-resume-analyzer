@@ -57,7 +57,6 @@ public class JobQueue {
     @Column(name = "priority", nullable = false)
     private Integer priority;
 
-    @Lob
     @Column(name = "file_data", columnDefinition = "BYTEA")
     private byte[] fileData;
 
