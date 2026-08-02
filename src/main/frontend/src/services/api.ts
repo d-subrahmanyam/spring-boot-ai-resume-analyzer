@@ -45,6 +45,18 @@ export const getProcessStatus = async (trackerId: string): Promise<ProcessStatus
   return response.data
 }
 
+/**
+ * Open a Server-Sent Events stream of live processing status.
+ *
+ * Uses a relative URL so it flows through the Vite dev proxy / nginx, avoiding
+ * CORS.  The JWT is passed as a query parameter because the browser EventSource
+ * API cannot set Authorization headers.
+ */
+export const openTrackerEventSource = (): EventSource => {
+  const token = localStorage.getItem('accessToken') || ''
+  return new EventSource(`/api/upload/status/events?token=${encodeURIComponent(token)}`)
+}
+
 export const getJobQueueStats = async (): Promise<JobQueueStats> => {
   const response = await axiosInstance.get<JobQueueStats>('/api/jobs/stats')
   return response.data

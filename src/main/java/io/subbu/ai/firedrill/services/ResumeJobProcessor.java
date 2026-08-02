@@ -8,6 +8,7 @@ import io.subbu.ai.firedrill.models.EmploymentEntry;
 import io.subbu.ai.firedrill.models.ProcessStatus;
 import io.subbu.ai.firedrill.models.ResumeAnalysisRequest;
 import io.subbu.ai.firedrill.models.ResumeAnalysisResponse;
+import io.subbu.ai.firedrill.models.TrackerStatusEvent;
 import io.subbu.ai.firedrill.repos.CandidateRepository;
 import io.subbu.ai.firedrill.repos.ProcessTrackerRepository;
 import lombok.RequiredArgsConstructor;
@@ -35,6 +36,7 @@ public class ResumeJobProcessor {
     private final CandidateRepository candidateRepository;
     private final ProcessTrackerRepository trackerRepository;
     private final JobQueueService jobQueueService;
+    private final TrackerEventPublisher trackerEventPublisher;
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
     /**
@@ -103,6 +105,7 @@ public class ResumeJobProcessor {
 
             tracker.updateStatus(ProcessStatus.RESUME_ANALYZED, "Resume analyzed");
             trackerRepository.save(tracker);
+            trackerEventPublisher.publish(tracker, TrackerStatusEvent.TYPE_UPDATE);
 
             // Send heartbeat after AI analysis
             jobQueueService.updateHeartbeat(jobId);
@@ -144,9 +147,11 @@ public class ResumeJobProcessor {
 
             tracker.updateStatus(ProcessStatus.EMBED_GENERATED, "Embeddings generated");
             trackerRepository.save(tracker);
+            trackerEventPublisher.publish(tracker, TrackerStatusEvent.TYPE_UPDATE);
 
             tracker.updateStatus(ProcessStatus.VECTOR_DB_UPDATED, "Vector database updated");
             trackerRepository.save(tracker);
+            trackerEventPublisher.publish(tracker, TrackerStatusEvent.TYPE_UPDATE);
 
             // Prepare result metadata
             Map<String, Object> result = new HashMap<>();
@@ -164,6 +169,7 @@ public class ResumeJobProcessor {
             // Record this file as processed; batch-level COMPLETED only when all files are done
             trackerRepository.recordProcessedFile(
                     trackerId, ProcessStatus.COMPLETED, "Resume analyzed — awaiting confirmation");
+            publishTracker(trackerId, TrackerStatusEvent.TYPE_PROCESSED);
 
             log.info("Resume job processing completed successfully: jobId={}, candidateId={}, duration={}s", 
                      jobId, candidate.getId(), 
@@ -173,6 +179,21 @@ public class ResumeJobProcessor {
         } catch (Exception e) {
             log.error("Error processing resume job: jobId={}, error={}", jobId, e.getMessage(), e);
             handleJobFailure(job, e);
+        }
+    }
+
+    /**
+     * Publish the freshest tracker state after an atomic bulk update
+     * (per-file progress / failures), since the in-memory tracker is stale
+     * after those queries run.  Failures to publish are logged and never
+     * interrupt resume processing.
+     */
+    private void publishTracker(UUID trackerId, String eventType) {
+        try {
+            trackerRepository.findById(trackerId)
+                    .ifPresent(tracker -> trackerEventPublisher.publish(tracker, eventType));
+        } catch (Exception e) {
+            log.warn("Failed to publish tracker event {} for {}: {}", eventType, trackerId, e.getMessage());
         }
     }
 
@@ -212,11 +233,13 @@ public class ResumeJobProcessor {
                     String retryMessage = String.format("Processing failed, will retry (attempt %d/%d): %s",
                             job.getRetryCount() + 1, job.getMaxRetries(), errorMessage);
                     trackerRepository.updateTrackerMessage(trackerId, retryMessage);
+                    publishTracker(trackerId, TrackerStatusEvent.TYPE_UPDATE);
                     log.debug("Updated process tracker message (will retry): trackerId={}", trackerId);
                 } else {
                     String failureMessage = String.format("Processing failed permanently: %s", errorMessage);
                     trackerRepository.recordFailedFile(
                             trackerId, ProcessStatus.FAILED, failureMessage);
+                    publishTracker(trackerId, TrackerStatusEvent.TYPE_FAILED);
                     log.debug("Recorded failed file on tracker: trackerId={}", trackerId);
                 }
             }

@@ -4,6 +4,8 @@ import uploadReducer, {
   uploadSuccess,
   uploadFailure,
   updateProcessStatus,
+  processEvent,
+  setSseStatus,
   clearTracker,
   fetchRecentTrackers,
   fetchRecentTrackersSuccess,
@@ -17,6 +19,7 @@ describe('uploadSlice', () => {
     tracker: null,
     trackers: [],
     fetchingTrackers: false,
+    sseStatus: 'disconnected' as const,
     error: null,
   };
 
@@ -74,6 +77,50 @@ describe('uploadSlice', () => {
     
     expect(actual.tracker).toBeNull();
     expect(actual.error).toBeNull();
+  });
+
+  it('should handle setSseStatus', () => {
+    const actual = uploadReducer(initialState, setSseStatus('open'));
+    expect(actual.sseStatus).toBe('open');
+  });
+
+  it('should upsert process events into the history list', () => {
+    const first = { ...mockProcessTracker, id: 't1', status: 'INITIATED' as const };
+    const updated = { ...mockProcessTracker, id: 't1', status: 'RESUME_ANALYZED' as const, processedFiles: 3 };
+
+    let state = uploadReducer(initialState, processEvent(first));
+    expect(state.trackers).toHaveLength(1);
+
+    state = uploadReducer(state, processEvent(updated));
+    expect(state.trackers).toHaveLength(1);
+    expect(state.trackers[0].status).toBe('RESUME_ANALYZED');
+    expect(state.trackers[0].processedFiles).toBe(3);
+  });
+
+  it('should promote an active event to the current tracker when none is set', () => {
+    const active = { ...mockProcessTracker, id: 't1', status: 'EMBED_GENERATED' as const };
+    const actual = uploadReducer(initialState, processEvent(active));
+
+    expect(actual.tracker?.id).toBe('t1');
+    expect(actual.tracker?.status).toBe('EMBED_GENERATED');
+  });
+
+  it('should not promote a completed event to the current tracker when none is set', () => {
+    const completed = { ...mockProcessTracker, id: 't1' }; // mockProcessTracker is COMPLETED
+    const actual = uploadReducer(initialState, processEvent(completed));
+
+    expect(actual.tracker).toBeNull();
+    expect(actual.trackers).toHaveLength(1);
+  });
+
+  it('should keep an existing current tracker in sync when its event arrives', () => {
+    const active = { ...mockProcessTracker, id: 't1', status: 'INITIATED' as const };
+    const progressed = { ...mockProcessTracker, id: 't1', status: 'VECTOR_DB_UPDATED' as const };
+
+    let state = uploadReducer(initialState, processEvent(active));
+    state = uploadReducer(state, processEvent(progressed));
+
+    expect(state.tracker?.status).toBe('VECTOR_DB_UPDATED');
   });
 
   it('should handle fetchRecentTrackers', () => {

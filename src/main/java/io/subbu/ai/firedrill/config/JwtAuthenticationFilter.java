@@ -68,12 +68,21 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     /**
-     * Extract JWT token from request header
+     * Extract JWT token from the Authorization header or the {@code token}
+     * query parameter.
+     *
+     * <p>The query-parameter path exists for Server-Sent Events: the browser's
+     * {@code EventSource} API cannot set HTTP headers, so the token is carried
+     * in the request URL instead.</p>
      */
     private String getJwtFromRequest(HttpServletRequest request) {
         String bearerToken = request.getHeader("Authorization");
         if (StringUtils.hasText(bearerToken) && bearerToken.startsWith("Bearer ")) {
             return bearerToken.substring(7);
+        }
+        String tokenParam = request.getParameter("token");
+        if (StringUtils.hasText(tokenParam)) {
+            return tokenParam;
         }
         return null;
     }

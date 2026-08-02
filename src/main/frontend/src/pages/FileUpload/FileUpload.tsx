@@ -6,61 +6,47 @@ import { RootState } from '@/store'
 import ProcessTrackerTable from '@/components/ProcessTrackerTable/ProcessTrackerTable'
 import styles from './FileUpload.module.css'
 
-const POLL_INTERVAL_MS = 2000
-const MAX_POLL_DURATION_MS = 5 * 60 * 1000
+const FALLBACK_POLL_INTERVAL_MS = 10000
 
 const FileUpload = () => {
   const dispatch = useDispatch()
-  const { uploading, tracker, trackers, error } = useSelector((state: RootState) => state.upload)
+  const { uploading, tracker, trackers, error, sseStatus } = useSelector((state: RootState) => state.upload)
   const [files, setFiles] = useState<File[]>([])
   const [dragging, setDragging] = useState(false)
-  const [pollTimedOut, setPollTimedOut] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const pollIntervalRef = useRef<NodeJS.Timeout>()
-  const pollStartRef = useRef<{ trackerId: string; startedAt: number }>({ trackerId: '', startedAt: 0 })
+  const fallbackIntervalRef = useRef<NodeJS.Timeout>()
 
   // Fetch recent trackers on mount
   useEffect(() => {
     dispatch(fetchRecentTrackers(24)) // Fetch trackers from last 24 hours
   }, [dispatch])
 
-  // Poll tracker status if processing, with a timeout safety net
+  // Fallback poll: only when the SSE stream is down, so the UI never goes stale.
   useEffect(() => {
     const isActive = tracker && tracker.status !== 'COMPLETED' && tracker.status !== 'FAILED'
+    const sseDown = sseStatus !== 'open'
 
-    if (!isActive) {
-      if (pollIntervalRef.current) {
-        clearInterval(pollIntervalRef.current)
+    if (!isActive || !sseDown) {
+      if (fallbackIntervalRef.current) {
+        clearInterval(fallbackIntervalRef.current)
       }
       return
     }
 
-    if (pollStartRef.current.trackerId !== tracker.id) {
-      pollStartRef.current = { trackerId: tracker.id, startedAt: Date.now() }
-      setPollTimedOut(false)
+    if (fallbackIntervalRef.current) {
+      clearInterval(fallbackIntervalRef.current)
     }
 
-    if (pollIntervalRef.current) {
-      clearInterval(pollIntervalRef.current)
-    }
-
-    pollIntervalRef.current = setInterval(() => {
-      if (Date.now() - pollStartRef.current.startedAt >= MAX_POLL_DURATION_MS) {
-        if (pollIntervalRef.current) {
-          clearInterval(pollIntervalRef.current)
-        }
-        setPollTimedOut(true)
-        return
-      }
+    fallbackIntervalRef.current = setInterval(() => {
       dispatch(fetchProcessStatus(tracker.id))
-    }, POLL_INTERVAL_MS)
+    }, FALLBACK_POLL_INTERVAL_MS)
 
     return () => {
-      if (pollIntervalRef.current) {
-        clearInterval(pollIntervalRef.current)
+      if (fallbackIntervalRef.current) {
+        clearInterval(fallbackIntervalRef.current)
       }
     }
-  }, [tracker, dispatch])
+  }, [tracker, sseStatus, dispatch])
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault()
@@ -175,9 +161,9 @@ const FileUpload = () => {
                 {tracker.message}
               </p>
             )}
-            {pollTimedOut && (
-              <p style={{ color: '#f56565', marginTop: '1rem' }}>
-                Status polling timed out after 5 minutes. Refresh the page to check for updates.
+            {sseStatus !== 'open' && tracker.status !== 'COMPLETED' && tracker.status !== 'FAILED' && (
+              <p style={{ color: '#ed8936', marginTop: '1rem' }}>
+                Live updates unavailable — refreshing status periodically.
               </p>
             )}
             {(tracker.status === 'COMPLETED' || tracker.status === 'FAILED') && (

@@ -4,6 +4,7 @@ import io.subbu.ai.firedrill.entities.ProcessTracker;
 import io.subbu.ai.firedrill.models.JobPriority;
 import io.subbu.ai.firedrill.models.JobType;
 import io.subbu.ai.firedrill.models.ProcessStatus;
+import io.subbu.ai.firedrill.models.TrackerStatusEvent;
 import io.subbu.ai.firedrill.repos.ProcessTrackerRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -37,6 +38,7 @@ public class FileUploadService {
     private final FileParserService fileParserService;
     private final ProcessTrackerRepository trackerRepository;
     private final JobQueueService jobQueueService;
+    private final TrackerEventPublisher trackerEventPublisher;
 
     @Value("${app.upload.directory:./uploads}")
     private String uploadDirectory;
@@ -104,6 +106,7 @@ public class FileUploadService {
                     String.format("Created %d job(s) in queue for processing", jobCount));
         }
         trackerRepository.save(tracker);
+        trackerEventPublisher.publish(tracker, TrackerStatusEvent.TYPE_UPDATE);
 
         log.info("Created {} jobs in queue for batch upload", jobCount);
         return tracker.getId();
@@ -165,6 +168,7 @@ public class FileUploadService {
                     String.format("Created %d job(s) in queue for processing", jobCount));
         }
         trackerRepository.save(tracker);
+        trackerEventPublisher.publish(tracker, TrackerStatusEvent.TYPE_UPDATE);
 
         log.info("Created {} job(s) in queue: filename={}, trackerId={}", jobCount, filename, tracker.getId());
         return tracker.getId();
@@ -271,6 +275,16 @@ public class FileUploadService {
     public ProcessTracker getProcessStatus(UUID trackerId) {
         return trackerRepository.findById(trackerId)
                 .orElseThrow(() -> new IllegalArgumentException("Tracker not found: " + trackerId));
+    }
+
+    /**
+     * Get all trackers that are still being processed (not completed or failed).
+     * Used to replay the current state to a newly connected SSE client.
+     *
+     * @return list of in-progress process trackers
+     */
+    public List<ProcessTracker> getActiveTrackers() {
+        return trackerRepository.findByStatusNotIn(List.of(ProcessStatus.COMPLETED, ProcessStatus.FAILED));
     }
 
     private boolean isZip(String filename) {

@@ -58,8 +58,8 @@ describe('CandidateMatching Component', () => {
     
     render(<CandidateMatching />, { preloadedState: initialState });
     
-    // Component shows "Matching..." when matchingInProgress is true
-    expect(screen.getByText(/Matching/i)).toBeInTheDocument();
+    // Component shows the full-screen loading overlay when matchingInProgress is true
+    expect(screen.getByText(/Matching Candidates/i)).toBeInTheDocument();
   });
 
   it('should show error message when error occurs', () => {

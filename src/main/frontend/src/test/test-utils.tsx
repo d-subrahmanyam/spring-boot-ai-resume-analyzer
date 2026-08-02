@@ -4,10 +4,13 @@ import { BrowserRouter } from 'react-router-dom';
 import { render, RenderOptions } from '@testing-library/react';
 import { ReactElement } from 'react';
 import createSagaMiddleware from 'redux-saga';
+import authReducer from '../store/slices/authSlice';
 import candidatesReducer from '../store/slices/candidatesSlice';
 import jobsReducer from '../store/slices/jobsSlice';
 import matchesReducer from '../store/slices/matchesSlice';
 import uploadReducer from '../store/slices/uploadSlice';
+import enrichmentReducer from '../store/slices/enrichmentSlice';
+import confirmationReducer from '../store/slices/confirmationSlice';
 import rootSaga from '../store/sagas';
 
 interface ExtendedRenderOptions extends Omit<RenderOptions, 'queries'> {
@@ -16,10 +19,13 @@ interface ExtendedRenderOptions extends Omit<RenderOptions, 'queries'> {
 }
 
 const rootReducer = combineReducers({
+  auth: authReducer,
   candidates: candidatesReducer,
   jobs: jobsReducer,
   matches: matchesReducer,
   upload: uploadReducer,
+  enrichment: enrichmentReducer,
+  confirmation: confirmationReducer,
 });
 
 function createTestStore(preloadedState: any = {}) {

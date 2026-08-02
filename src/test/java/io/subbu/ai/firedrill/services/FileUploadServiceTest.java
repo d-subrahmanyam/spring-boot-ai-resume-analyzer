@@ -39,6 +39,9 @@ class FileUploadServiceTest {
     @Mock
     private JobQueueService jobQueueService;
 
+    @Mock
+    private TrackerEventPublisher trackerEventPublisher;
+
     @InjectMocks
     private FileUploadService fileUploadService;
 

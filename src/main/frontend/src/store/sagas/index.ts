@@ -241,7 +241,7 @@ function* uploadFilesSaga(action: PayloadAction<File[]>) {
 function* fetchProcessStatusSaga(action: PayloadAction<string>): Generator<any, void, ProcessTracker> {
   try {
     const status = yield call(getProcessStatus, action.payload)
-    yield put(uploadActions.updateProcessStatus(status))
+    yield put(uploadActions.processEvent(status))
   } catch (error: any) {
     yield put(uploadActions.uploadFailure(error.message))
   }

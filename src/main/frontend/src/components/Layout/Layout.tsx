@@ -11,6 +11,8 @@ import {
   selectCanUploadResumes,
   selectCanManageJobs,
 } from '@store/selectors/authSelectors'
+import { useTrackerEventStream } from '@/hooks/useTrackerEventStream'
+import ProcessingBanner from '@/components/ProcessingBanner/ProcessingBanner'
 import {
   LayoutDashboard,
   ShieldCheck,
@@ -41,6 +43,10 @@ const Layout = () => {
   const canManageEmployees = useSelector(selectCanManageEmployees)
   const canUploadResumes = useSelector(selectCanUploadResumes)
   const canManageJobs = useSelector(selectCanManageJobs)
+
+  // Live processing-status stream — runs for the app's lifetime so updates keep
+  // flowing into Redux (and the banner below) regardless of the active route.
+  useTrackerEventStream()
 
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     try {
@@ -202,6 +208,8 @@ const Layout = () => {
             </div>
           )}
         </header>
+
+        {canUploadResumes && <ProcessingBanner />}
 
         <main className={styles.main}>
           <Outlet />

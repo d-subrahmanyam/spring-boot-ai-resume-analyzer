@@ -1,15 +1,22 @@
 package io.subbu.ai.firedrill.controller;
 
 import io.subbu.ai.firedrill.entities.ProcessTracker;
+import io.subbu.ai.firedrill.models.TrackerStatusEvent;
 import io.subbu.ai.firedrill.services.FileUploadService;
+import io.subbu.ai.firedrill.services.TrackerEventPublisher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.io.IOException;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -25,6 +32,7 @@ import java.util.UUID;
 public class FileUploadController {
 
     private final FileUploadService fileUploadService;
+    private final TrackerEventPublisher trackerEventPublisher;
 
     /**
      * Handle resume file upload (single file or ZIP).
@@ -83,5 +91,39 @@ public class FileUploadController {
             log.error("Invalid tracker ID: {}", trackerId);
             return ResponseEntity.notFound().build();
         }
+    }
+
+    /**
+     * Server-Sent Events stream of live processing status.
+     *
+     * <p>On connect, the current state of every active (non-terminal) tracker is
+     * replayed as {@code SNAPSHOT} events, then every subsequent background update
+     * is pushed to the client as it happens.  The browser connects with
+     * {@code EventSource("/api/upload/status/events?token=...")} because the
+     * {@code EventSource} API cannot set Authorization headers.</p>
+     *
+     * @return an infinite SSE stream (heartbeat comment every 15s)
+     */
+    @GetMapping(value = "/status/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public ResponseEntity<SseEmitter> streamStatusEvents() {
+        SseEmitter emitter = trackerEventPublisher.subscribe();
+        log.info("SSE client connected: activeEmitters={}", trackerEventPublisher.getEmitterCount());
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("X-Accel-Buffering", "no");
+        headers.setCacheControl("no-cache");
+
+        // Replay current state so a reconnecting / refreshed client never misses progress
+        try {
+            List<ProcessTracker> active = fileUploadService.getActiveTrackers();
+            for (ProcessTracker tracker : active) {
+                emitter.send(SseEmitter.event().name(TrackerStatusEvent.TYPE_SNAPSHOT)
+                        .data(TrackerStatusEvent.from(tracker, TrackerStatusEvent.TYPE_SNAPSHOT)));
+            }
+        } catch (IOException | IllegalStateException e) {
+            log.warn("Failed to send tracker snapshot: {}", e.getMessage());
+        }
+
+        return ResponseEntity.ok().headers(headers).body(emitter);
     }
 }

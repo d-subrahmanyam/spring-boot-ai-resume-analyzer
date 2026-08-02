@@ -39,6 +39,9 @@ class ResumeJobProcessorTest {
     private ProcessTrackerRepository trackerRepository;
 
     @Mock
+    private TrackerEventPublisher trackerEventPublisher;
+
+    @Mock
     private JobQueueService jobQueueService;
 
     @Mock
