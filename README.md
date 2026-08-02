@@ -397,7 +397,7 @@ CREATE EXTENSION vector;
 
 1. Download and install [LM Studio](https://lmstudio.ai/)
 2. Download recommended models:
-   - **Primary Model**: Mistral 7B Instruct v0.3 or LLaMA 3.1 8B Instruct
+   - **Primary Model**: Ministral 3 14B Reasoning (`mistralai/ministral-3-14b-reasoning`) — strong JSON output and reasoning
    - **Embedding Model**: nomic-embed-text (768 dimensions)
 3. Start LM Studio local server on `http://localhost:1234`
 4. (Optional but recommended) Under **Developer → API Key**, enable an API key and set it as `LLM_STUDIO_API_KEY` in your `.env` — the app sends it as `Authorization: Bearer <token>` per LM Studio's docs
@@ -652,7 +652,7 @@ POSTGRES_PASSWORD=your_password
 # LLM Studio
 LLM_STUDIO_BASE_URL=http://localhost:1234/v1
 LLM_STUDIO_API_KEY=not-needed
-LLM_STUDIO_MODEL=mistral-7b-instruct-v0.3
+LLM_STUDIO_MODEL=mistralai/ministral-3-14b-reasoning
 LLM_STUDIO_EMBEDDING_MODEL=nomic-embed-text
 
 # Application

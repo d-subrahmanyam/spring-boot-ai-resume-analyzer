@@ -3,19 +3,20 @@
 ## Recommended Models for Resume Analyzer
 
 ### Primary LLM (for Analysis and Matching)
-**Recommended: Mistral 7B Instruct v0.3** or **LLaMA 3.1 8B Instruct**
+**Recommended: Ministral 3 14B Reasoning** (`mistralai/ministral-3-14b-reasoning`)
 
-#### Why These Models?
+#### Why This Model?
 - **Excellent instruction following**: Critical for structured JSON output
-- **Strong at text analysis**: Resume parsing and candidate matching
-- **Efficient**: Runs well on consumer hardware (16GB+ RAM recommended)
-- **Reliable JSON generation**: Important for our structured data needs
+- **Reasoning-optimized**: Strong at multi-step resume analysis and candidate matching
+- **Native JSON generation**: Best-in-class agentic/structured output capabilities
+- **Efficient**: Runs on ~10 GB minimum system memory (14B params)
 
 #### Alternative Models (in order of preference):
-1. **LLaMA 3.1 8B Instruct** - Latest, very capable
-2. **Mistral 7B Instruct v0.3** - Proven reliability
-3. **Qwen 2.5 14B Instruct** - Excellent but larger (needs 24GB+ RAM)
-4. **Mixtral 8x7B Instruct** - Very powerful but resource-intensive (32GB+ RAM)
+1. **Ministral 3 14B** (non-reasoning) - Faster for latency-sensitive tasks
+2. **LLaMA 3.1 8B Instruct** - Lighter, still very capable
+3. **Mistral 7B Instruct v0.3** - Proven reliability on lower-end hardware
+4. **Qwen 2.5 14B Instruct** - Excellent but larger (needs 24GB+ RAM)
+5. **Mixtral 8x7B Instruct** - Very powerful but resource-intensive (32GB+ RAM)
 
 ### Embedding Model
 **Recommended: nomic-embed-text v1.5**
@@ -40,7 +41,7 @@ Download from: [LM Studio Official Website](https://lmstudio.ai/)
 #### Load Main LLM:
 1. Open LM Studio
 2. Go to "Search" or "Discover"
-3. Search for: **"mistral-7b-instruct-v0.3"** or **"llama-3.1-8b-instruct"**
+3. Search for: **"ministral-3-14b-reasoning"** (or **"llama-3.1-8b-instruct"**) in LM Studio's Discover tab
 4. Download the GGUF quantized version:
    - For 16GB RAM: `Q4_K_M` quantization (4-bit)
    - For 32GB RAM: `Q5_K_M` or `Q6_K` quantization (5-6 bit)
@@ -87,8 +88,8 @@ Some setups may require running embeddings on a separate port or instance. Check
 
 The application is already configured to use:
 - **Base URL**: `http://localhost:1234/v1`
-- **Model**: `mistral-7b-instruct-v0.3` (configurable in `application.yml`)
-- **Embedding Model**: `nomic-embed-text`
+- **Model**: `mistralai/ministral-3-14b-reasoning` (configurable in `application.yml`)
+- **Embedding Model**: `text-embedding-nomic-embed-text-v1.5`
 - **API Key**: `LLM_STUDIO_API_KEY` (sent as `Authorization: Bearer <token>`; defaults to `not-needed`)
 
 ### Changing Models
@@ -119,6 +120,7 @@ spring:
 ### Model Selection Based on Hardware
 | RAM Available | Recommended Model | Quantization |
 |---------------|-------------------|--------------|
+| 16 GB | Ministral 3 14B Reasoning | Q4_K_M |
 | 16 GB | Mistral 7B Instruct | Q4_K_M |
 | 24 GB | LLaMA 3.1 8B Instruct | Q5_K_M |
 | 32 GB | Qwen 2.5 14B Instruct | Q4_K_M |
@@ -160,9 +162,18 @@ Based on community benchmarks and our use case:
 
 | Model | Speed | Accuracy | JSON Quality | Resource Usage |
 |-------|-------|----------|--------------|----------------|
+| Ministral 3 14B Reasoning | ⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | Medium |
 | Mistral 7B Instruct v0.3 | ⭐⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | Low |
 | LLaMA 3.1 8B Instruct | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | Low-Medium |
 | Qwen 2.5 14B Instruct | ⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | Medium-High |
 | Mixtral 8x7B Instruct | ⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | High |
 
-**Recommendation**: Start with **Mistral 7B Instruct v0.3** for best balance. Upgrade to **LLaMA 3.1 8B** if you have resources and want better accuracy.
+**Recommendation**: Start with **Ministral 3 14B Reasoning** for best accuracy and native JSON output. It is a reasoning model, so first-generation responses take slightly longer (it thinks before answering) and the app's prompts/max-tokens are sized to accommodate that.
+
+### Reasoning Model Notes
+
+Ministral 3 14B Reasoning is a *reasoning* model — LM Studio emits a `reasoning_content` field (thinking trace) before the final `content`. A few things to know:
+
+- **Empty `content`**: if the model spends its whole token budget on reasoning, `content` can come back empty. The app treats that as "LLM returned an empty response" and falls back. If you see this, increase `max-tokens` in `application.yml` (currently 4000 default) or lower the model's reasoning effort in LM Studio.
+- **Latency**: reasoning tokens add to generation time. Budget accordingly on the match/analysis endpoints.
+- **JSON reliability**: the model's native JSON output makes it well suited to the app's structured prompts.
