@@ -118,6 +118,39 @@ public class Candidate {
     private String currentCompany;
 
     /**
+     * Lifecycle status of this candidate record (PENDING_CONFIRMATION / ACTIVE).
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status")
+    private io.subbu.ai.firedrill.models.CandidateStatus status;
+
+    /**
+     * Employment history as a JSON array of {@code EmploymentEntry} objects.
+     * Stored as text because the entries are extracted by the LLM and consumed
+     * by company research / impressions, not queried relationally.
+     */
+    @Column(name = "work_history", columnDefinition = "TEXT")
+    private String workHistory;
+
+    /**
+     * LinkedIn profile URL extracted from the resume or entered manually.
+     */
+    @Column(name = "linkedin_url")
+    private String linkedInUrl;
+
+    /**
+     * GitHub profile URL extracted from the resume or entered manually.
+     */
+    @Column(name = "github_url")
+    private String githubUrl;
+
+    /**
+     * Twitter / X profile URL extracted from the resume or entered manually.
+     */
+    @Column(name = "twitter_url")
+    private String twitterUrl;
+
+    /**
      * Timestamp when the record was created
      */
     @CreationTimestamp

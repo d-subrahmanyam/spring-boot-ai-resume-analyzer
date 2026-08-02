@@ -6,9 +6,11 @@ import io.subbu.ai.firedrill.entities.CandidateMatch;
 import io.subbu.ai.firedrill.entities.JobRequirement;
 import io.subbu.ai.firedrill.entities.MatchAudit;
 import io.subbu.ai.firedrill.models.CandidateMatchResponse;
+import io.subbu.ai.firedrill.models.CandidateStatus;
 import io.subbu.ai.firedrill.repos.CandidateMatchRepository;
 import io.subbu.ai.firedrill.repos.CandidateRepository;
 import io.subbu.ai.firedrill.repos.JobRequirementRepository;
+import io.subbu.ai.firedrill.repos.ResumeEmbeddingRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -55,6 +57,15 @@ class CandidateMatchingServiceTest {
 
     @Mock
     private EnrichmentProperties enrichmentProps;
+
+    @Mock
+    private EmbeddingService embeddingService;
+
+    @Mock
+    private ResumeEmbeddingRepository resumeEmbeddingRepository;
+
+    @Mock
+    private CompanyResearchService companyResearchService;
 
     @InjectMocks
     private CandidateMatchingService candidateMatchingService;
@@ -221,7 +232,7 @@ class CandidateMatchingServiceTest {
         List<Candidate> allCandidates = List.of(mockCandidate, candidate2);
 
         when(jobRequirementRepository.findById(jobRequirementId)).thenReturn(Optional.of(mockJobRequirement));
-        when(candidateRepository.findAll()).thenReturn(allCandidates);
+        when(candidateRepository.findByStatus(CandidateStatus.ACTIVE)).thenReturn(allCandidates);
         when(matchRepository.findByCandidateIdAndJobRequirementId(any(), any()))
                 .thenReturn(Optional.empty());
         when(aiService.matchCandidate(any())).thenReturn(mockMatchResponse);
@@ -232,7 +243,7 @@ class CandidateMatchingServiceTest {
 
         // Then
         assertThat(results).hasSize(2);
-        verify(candidateRepository).findAll();
+        verify(candidateRepository).findByStatus(CandidateStatus.ACTIVE);
         verify(aiService, times(2)).matchCandidate(any());
         verify(matchRepository, times(2)).save(any(CandidateMatch.class));
     }
@@ -340,7 +351,7 @@ class CandidateMatchingServiceTest {
         List<Candidate> candidates = List.of(mockCandidate, candidate2);
 
         when(jobRequirementRepository.findById(jobRequirementId)).thenReturn(Optional.of(mockJobRequirement));
-        when(candidateRepository.findAll()).thenReturn(candidates);
+        when(candidateRepository.findByStatus(CandidateStatus.ACTIVE)).thenReturn(candidates);
         when(matchRepository.findByCandidateIdAndJobRequirementId(mockCandidate.getId(), jobRequirementId))
                 .thenReturn(Optional.empty());
         when(matchRepository.findByCandidateIdAndJobRequirementId(candidate2.getId(), jobRequirementId))

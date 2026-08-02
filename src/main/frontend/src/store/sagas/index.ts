@@ -19,6 +19,8 @@ import { gqlRequestWithRefresh,
   ENRICH_CANDIDATE_PROFILE,
   ENRICH_CANDIDATE_PROFILE_FROM_URL,
   REFRESH_CANDIDATE_PROFILE,
+  GET_PENDING_CANDIDATES,
+  CONFIRM_CANDIDATE,
 } from '@services/graphql'
 import { uploadResumes, getProcessStatus } from '@services/api'
 import * as candidatesActions from '@store/slices/candidatesSlice'
@@ -26,12 +28,14 @@ import * as jobsActions from '@store/slices/jobsSlice'
 import * as matchesActions from '@store/slices/matchesSlice'
 import * as uploadActions from '@store/slices/uploadSlice'
 import * as enrichmentActions from '@store/slices/enrichmentSlice'
+import * as confirmationActions from '@store/slices/confirmationSlice'
 import { authSagas } from './authSagas'
 import type { Candidate } from '@store/slices/candidatesSlice'
 import type { JobRequirement } from '@store/slices/jobsSlice'
 import type { CandidateMatch } from '@store/slices/matchesSlice'
 import type { ProcessTracker } from '@store/slices/uploadSlice'
 import type { CandidateExternalProfile, ExternalProfileSource } from '@store/slices/enrichmentSlice'
+import type { PendingCandidate } from '@store/slices/confirmationSlice'
 
 // Helper to call graphql client with automatic token refresh on UNAUTHORIZED
 const gqlRequest = (query: any, variables?: any) => gqlRequestWithRefresh(query, variables)
@@ -325,6 +329,29 @@ function* refreshProfileSaga(action: PayloadAction<{ profileId: string; candidat
   }
 }
 
+// Candidate Confirmation Sagas
+function* fetchPendingCandidatesSaga() {
+  try {
+    const data: { pendingCandidates: PendingCandidate[] } = yield call(
+      gqlRequest,
+      GET_PENDING_CANDIDATES
+    )
+    yield put(confirmationActions.fetchPendingCandidatesSuccess(data.pendingCandidates))
+  } catch (error: any) {
+    yield put(confirmationActions.fetchPendingCandidatesFailure(error.message))
+  }
+}
+
+function* confirmCandidateSaga(action: PayloadAction<{ id: string }>) {
+  try {
+    const { id, ...input } = action.payload
+    yield call(gqlRequest, CONFIRM_CANDIDATE, { candidateId: id, input })
+    yield put(confirmationActions.confirmCandidateSuccess({ id }))
+  } catch (error: any) {
+    yield put(confirmationActions.confirmCandidateFailure(error.message))
+  }
+}
+
 // Root Saga
 export default function* rootSaga() {
   yield all([
@@ -350,5 +377,8 @@ export default function* rootSaga() {
     takeEvery(enrichmentActions.enrichProfile.type, enrichProfileSaga),
     takeEvery(enrichmentActions.enrichFromUrl.type, enrichFromUrlSaga),
     takeEvery(enrichmentActions.refreshProfile.type, refreshProfileSaga),
+    // Candidate confirmation sagas
+    takeLatest(confirmationActions.fetchPendingCandidates.type, fetchPendingCandidatesSaga),
+    takeEvery(confirmationActions.confirmCandidate.type, confirmCandidateSaga),
   ])
 }

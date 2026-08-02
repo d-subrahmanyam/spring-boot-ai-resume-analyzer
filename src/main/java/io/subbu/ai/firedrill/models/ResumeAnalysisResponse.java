@@ -63,4 +63,25 @@ public class ResumeAnalysisResponse {
      * Confidence score of the analysis (0-1)
      */
     private Double confidenceScore;
+
+    /**
+     * Employment history extracted from the resume (company, title, years).
+     */
+    @JsonDeserialize(using = WorkHistoryDeserializer.class)
+    private java.util.List<EmploymentEntry> workHistory;
+
+    /**
+     * LinkedIn profile URL found in the resume, if any.
+     */
+    private String linkedInUrl;
+
+    /**
+     * GitHub profile URL found in the resume, if any.
+     */
+    private String githubUrl;
+
+    /**
+     * Twitter / X profile URL found in the resume, if any.
+     */
+    private String twitterUrl;
 }

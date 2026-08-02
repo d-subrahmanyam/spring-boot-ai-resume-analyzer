@@ -1,12 +1,18 @@
 package io.subbu.ai.firedrill.resolver;
 
 import io.subbu.ai.firedrill.entities.Candidate;
+import io.subbu.ai.firedrill.entities.CompanyImpression;
+import io.subbu.ai.firedrill.models.CandidateStatus;
+import io.subbu.ai.firedrill.models.ConfirmCandidateInput;
 import io.subbu.ai.firedrill.repos.CandidateRepository;
+import io.subbu.ai.firedrill.services.CandidateConfirmationService;
+import io.subbu.ai.firedrill.services.CompanyResearchService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.graphql.data.method.annotation.Argument;
 import org.springframework.graphql.data.method.annotation.MutationMapping;
 import org.springframework.graphql.data.method.annotation.QueryMapping;
+import org.springframework.graphql.data.method.annotation.SchemaMapping;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Controller;
 
@@ -22,6 +28,8 @@ import java.util.UUID;
 public class CandidateResolver {
 
     private final CandidateRepository candidateRepository;
+    private final CandidateConfirmationService confirmationService;
+    private final CompanyResearchService companyResearchService;
 
     @QueryMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER', 'HIRING_MANAGER', 'HR')")
@@ -50,6 +58,35 @@ public class CandidateResolver {
     public List<Candidate> searchCandidatesBySkill(@Argument String skill) {
         log.info("Searching candidates by skill: {}", skill);
         return candidateRepository.findBySkillsContaining(skill);
+    }
+
+    @QueryMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER', 'HIRING_MANAGER', 'HR')")
+    public List<Candidate> pendingCandidates() {
+        log.info("Fetching candidates awaiting confirmation");
+        return candidateRepository.findByStatus(CandidateStatus.PENDING_CONFIRMATION);
+    }
+
+    @QueryMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER', 'HIRING_MANAGER', 'HR')")
+    public List<CompanyImpression> companyImpressionsForCandidate(@Argument UUID candidateId) {
+        log.info("Fetching company impressions for candidate: {}", candidateId);
+        return candidateRepository.findById(candidateId)
+                .map(companyResearchService::getImpressionsForCandidate)
+                .orElseThrow(() -> new RuntimeException("Candidate not found: " + candidateId));
+    }
+
+    @SchemaMapping(typeName = "Candidate", field = "companyImpressions")
+    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER', 'HIRING_MANAGER', 'HR')")
+    public List<CompanyImpression> companyImpressions(Candidate candidate) {
+        return companyResearchService.getImpressionsForCandidate(candidate);
+    }
+
+    @MutationMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER')")
+    public Candidate confirmCandidate(@Argument UUID candidateId, @Argument ConfirmCandidateInput input) {
+        log.info("Confirming candidate: {}", candidateId);
+        return confirmationService.confirmCandidate(candidateId, input);
     }
 
     @MutationMapping

@@ -108,6 +108,8 @@ public class AIService {
         log.info("Matching candidate for job: {}", request.getJobTitle());
         try {
             String enrichedSection = buildEnrichedSection(request.getEnrichedProfileContext());
+            String resumeContextSection = buildResumeContextSection(request.getRelevantResumeContext());
+            String companyImpressionsSection = buildCompanyImpressionsSection(request.getCompanyImpressionsContext());
 
             String userPrompt = prompts.getCandidateMatching().render(
                     "experienceSummary",  nullSafe(request.getExperienceSummary()),
@@ -116,6 +118,8 @@ public class AIService {
                     "academicBackground", nullSafe(request.getAcademicBackground()),
                     "yearsOfExperience",  String.valueOf(request.getYearsOfExperience() != null ? request.getYearsOfExperience() : 0),
                     "enrichedSection",    enrichedSection,
+                    "resumeContextSection",    resumeContextSection,
+                    "companyImpressionsSection", companyImpressionsSection,
                     "jobTitle",           nullSafe(request.getJobTitle()),
                     "jobDescription",     nullSafe(request.getJobDescription()),
                     "requiredSkills",     nullSafe(request.getRequiredSkills()),
@@ -146,6 +150,53 @@ public class AIService {
                     .strengths("")
                     .gaps("")
                     .recommendation("Error in Analysis")
+                    .build();
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Company due-diligence impressions
+    // -------------------------------------------------------------------------
+
+    /**
+     * Generates an AI impression of a company based on internet search snippets.
+     *
+     * <p>Used by the company-research pipeline step.  Falls back to an
+     * {@link CompanyVerdict#UNKNOWN} impression when the LLM is unavailable or
+     * returns unparseable content, so the intake pipeline is never blocked.</p>
+     *
+     * @param companyName   the company to assess
+     * @param searchResults raw internet search snippets for the company
+     * @return populated {@link CompanyImpressionResponse}
+     */
+    public CompanyImpressionResponse analyzeCompany(String companyName, String searchResults) {
+        log.info("Generating company impression for: {}", companyName);
+        try {
+            String userPrompt = prompts.getCompanyImpression().render(
+                    "companyName",   nullSafe(companyName),
+                    "searchResults", nullSafe(searchResults)
+            );
+
+            String rawResponse = callLlm(
+                    prompts.getCompanyImpression().getSystem(),
+                    userPrompt,
+                    /* temperature */ 0.1f,
+                    /* maxTokens  */ 500
+            );
+
+            String json = extractJson(rawResponse);
+            CompanyImpressionResponse response = objectMapper.readValue(json, CompanyImpressionResponse.class);
+            if (response.getVerdict() == null) {
+                response.setVerdict(CompanyVerdict.UNKNOWN);
+            }
+            return response;
+        } catch (Exception e) {
+            log.warn("Company impression generation failed for {} ({}); defaulting to UNKNOWN",
+                    companyName, e.getMessage());
+            return CompanyImpressionResponse.builder()
+                    .verdict(CompanyVerdict.UNKNOWN)
+                    .summary("No impression available — company research failed.")
+                    .confidenceScore(0.0)
                     .build();
         }
     }
@@ -358,5 +409,21 @@ public class AIService {
         }
         return "\nEXTERNAL PROFILE DATA (from GitHub / LinkedIn / Internet):\n"
                 + enrichedProfileContext + "\n";
+    }
+
+    private static String buildResumeContextSection(String relevantResumeContext) {
+        if (relevantResumeContext == null || relevantResumeContext.isBlank()) {
+            return "";
+        }
+        return "\nRELEVANT RESUME EVIDENCE (retrieved from the candidate's resume embeddings):\n"
+                + relevantResumeContext + "\n";
+    }
+
+    private static String buildCompanyImpressionsSection(String companyImpressionsContext) {
+        if (companyImpressionsContext == null || companyImpressionsContext.isBlank()) {
+            return "";
+        }
+        return "\nCOMPANY IMPRESSIONS (due-diligence on the candidate's past employers):\n"
+                + companyImpressionsContext + "\n";
     }
 }

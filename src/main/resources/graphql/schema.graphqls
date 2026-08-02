@@ -87,10 +87,39 @@ type Candidate {
     domainKnowledge: String
     academicBackground: String
     yearsOfExperience: Int
+    status: CandidateStatus
+    workHistory: String
+    linkedInUrl: String
+    githubUrl: String
+    twitterUrl: String
     createdAt: LocalDateTime!
     updatedAt: LocalDateTime!
     matches: [CandidateMatch!]
     externalProfiles: [CandidateExternalProfile!]
+    companyImpressions: [CompanyImpression!]
+}
+
+enum CandidateStatus {
+    PENDING_CONFIRMATION
+    ACTIVE
+}
+
+type CompanyImpression {
+    id: UUID!
+    companyName: String!
+    industry: String
+    verdict: CompanyVerdict!
+    summary: String
+    confidenceScore: Float
+    evidence: String
+    createdAt: LocalDateTime!
+    updatedAt: LocalDateTime!
+}
+
+enum CompanyVerdict {
+    GENUINE
+    SUSPICIOUS
+    UNKNOWN
 }
 
 type CandidateExternalProfile {
@@ -306,6 +335,18 @@ input UpdateCandidateMatchInput {
     recruiterNotes: String
 }
 
+input ConfirmCandidateInput {
+    name: String
+    email: String
+    mobile: String
+    skills: String
+    yearsOfExperience: Int
+    experienceSummary: String
+    linkedInUrl: String
+    githubUrl: String
+    twitterUrl: String
+}
+
 input LoginInput {
     username: String!
     password: String!
@@ -455,6 +496,10 @@ type Query {
 
     # External profile enrichment queries
     candidateExternalProfiles(candidateId: UUID!): [CandidateExternalProfile!]!
+
+    # Candidate confirmation / company impression queries
+    pendingCandidates: [Candidate!]!
+    companyImpressionsForCandidate(candidateId: UUID!): [CompanyImpression!]!
 }
 
 # Mutations
@@ -540,6 +585,9 @@ type Mutation {
     enrichCandidateProfile(candidateId: UUID!, source: ExternalProfileSource!): CandidateExternalProfile!
     enrichCandidateProfileFromUrl(candidateId: UUID!, profileUrl: String!): CandidateExternalProfile
     refreshCandidateProfile(profileId: UUID!): CandidateExternalProfile!
+
+    # Candidate confirmation mutations
+    confirmCandidate(candidateId: UUID!, input: ConfirmCandidateInput!): Candidate!
 }
 
 # Schema

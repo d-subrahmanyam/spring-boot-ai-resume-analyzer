@@ -664,3 +664,63 @@ export const REFRESH_CANDIDATE_PROFILE = `
     }
   }
 `
+
+// Candidate Confirmation Queries & Mutations
+export const GET_PENDING_CANDIDATES = `
+  query {
+    pendingCandidates {
+      id
+      name
+      email
+      mobile
+      skills
+      yearsOfExperience
+      academicBackground
+      experienceSummary
+      workHistory
+      linkedInUrl
+      githubUrl
+      twitterUrl
+      status
+      resumeFilename
+      createdAt
+      companyImpressions {
+        id
+        companyName
+        industry
+        verdict
+        summary
+        confidenceScore
+      }
+    }
+  }
+`
+
+export const CONFIRM_CANDIDATE = `
+  mutation ConfirmCandidate($candidateId: UUID!, $input: ConfirmCandidateInput!) {
+    confirmCandidate(candidateId: $candidateId, input: $input) {
+      id
+      name
+      email
+      mobile
+      skills
+      yearsOfExperience
+      experienceSummary
+      status
+    }
+  }
+`
+
+export const GET_COMPANY_IMPRESSIONS_FOR_CANDIDATE = `
+  query CompanyImpressionsForCandidate($candidateId: UUID!) {
+    companyImpressionsForCandidate(candidateId: $candidateId) {
+      id
+      companyName
+      industry
+      verdict
+      summary
+      confidenceScore
+      evidence
+    }
+  }
+`

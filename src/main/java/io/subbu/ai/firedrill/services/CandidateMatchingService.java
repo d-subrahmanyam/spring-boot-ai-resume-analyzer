@@ -7,11 +7,14 @@ import io.subbu.ai.firedrill.entities.ExternalProfileSource;
 import io.subbu.ai.firedrill.entities.CandidateMatch;
 import io.subbu.ai.firedrill.entities.JobRequirement;
 import io.subbu.ai.firedrill.entities.MatchAudit;
+import io.subbu.ai.firedrill.entities.ResumeEmbedding;
 import io.subbu.ai.firedrill.models.CandidateMatchRequest;
 import io.subbu.ai.firedrill.models.CandidateMatchResponse;
+import io.subbu.ai.firedrill.models.CandidateStatus;
 import io.subbu.ai.firedrill.repos.CandidateMatchRepository;
 import io.subbu.ai.firedrill.repos.CandidateRepository;
 import io.subbu.ai.firedrill.repos.JobRequirementRepository;
+import io.subbu.ai.firedrill.repos.ResumeEmbeddingRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -37,6 +40,9 @@ public class CandidateMatchingService {
     private final MatchAuditService matchAuditService;
     private final CandidateProfileEnrichmentService enrichmentService;
     private final EnrichmentProperties enrichmentProps;
+    private final EmbeddingService embeddingService;
+    private final ResumeEmbeddingRepository resumeEmbeddingRepository;
+    private final CompanyResearchService companyResearchService;
 
     /**
      * Match a single candidate against a job requirement.
@@ -51,6 +57,8 @@ public class CandidateMatchingService {
 
         Candidate candidate = candidateRepository.findById(candidateId)
                 .orElseThrow(() -> new IllegalArgumentException("Candidate not found: " + candidateId));
+
+        ensureActive(candidate);
 
         JobRequirement job = jobRequirementRepository.findById(jobRequirementId)
                 .orElseThrow(() -> new IllegalArgumentException("Job requirement not found: " + jobRequirementId));
@@ -78,7 +86,7 @@ public class CandidateMatchingService {
         MatchAudit audit = matchAuditService.createAudit(jobRequirementId, job.getTitle(), initiatedBy);
         long startTime = System.currentTimeMillis();
 
-        List<Candidate> allCandidates = candidateRepository.findAll();
+        List<Candidate> allCandidates = candidateRepository.findByStatus(CandidateStatus.ACTIVE);
         List<CandidateMatch> matches = new ArrayList<>();
 
         try {
@@ -284,8 +292,68 @@ public class CandidateMatchingService {
                 .minExperienceYears(job.getMinExperienceYears())
                 .maxExperienceYears(job.getMaxExperienceYears())
                 .enrichedProfileContext(enrichedContext)
+                .relevantResumeContext(buildRelevantResumeContext(candidate, job))
+                .companyImpressionsContext(buildCompanyImpressionsContext(candidate))
                 .build();
         return aiService.matchCandidate(matchRequest);
+    }
+
+    /**
+     * Retrieves the candidate's resume chunks most semantically similar to the
+     * job description using pgvector cosine similarity (RAG).
+     * Falls back to {@code null} on any failure so matching never breaks.
+     */
+    private String buildRelevantResumeContext(Candidate candidate, JobRequirement job) {
+        try {
+            String jobText = String.join(" ",
+                    nullSafe(job.getTitle()), nullSafe(job.getDescription()),
+                    nullSafe(job.getRequiredSkills()), nullSafe(job.getDomainRequirements()));
+
+            String queryEmbedding = embeddingService.generateQueryEmbedding(jobText);
+            List<ResumeEmbedding> chunks = resumeEmbeddingRepository
+                    .findSimilarResumesForCandidate(queryEmbedding, candidate.getId(), 5);
+
+            if (chunks == null || chunks.isEmpty()) {
+                return null;
+            }
+
+            StringBuilder sb = new StringBuilder();
+            for (ResumeEmbedding chunk : chunks) {
+                if (chunk.getContentChunk() != null && !chunk.getContentChunk().isBlank()) {
+                    sb.append("- [").append(nullSafe(chunk.getSectionType())).append("] ")
+                      .append(chunk.getContentChunk().trim()).append('\n');
+                }
+            }
+            return sb.length() > 0 ? sb.toString() : null;
+        } catch (Exception e) {
+            log.warn("[RAG] Resume-context retrieval failed for candidate {}: {}",
+                    candidate.getId(), e.getMessage());
+            return null;
+        }
+    }
+
+    private String buildCompanyImpressionsContext(Candidate candidate) {
+        try {
+            return companyResearchService.buildImpressionsContext(candidate);
+        } catch (Exception e) {
+            log.warn("Company impressions context build failed for candidate {}: {}",
+                    candidate.getId(), e.getMessage());
+            return null;
+        }
+    }
+
+    private static String nullSafe(String s) {
+        return s != null ? s : "";
+    }
+
+    /**
+     * Reject matching for candidates that are still awaiting confirmation.
+     */
+    private void ensureActive(Candidate candidate) {
+        if (candidate.getStatus() != null && candidate.getStatus() != CandidateStatus.ACTIVE) {
+            throw new IllegalArgumentException(
+                    "Candidate is awaiting confirmation and cannot be matched yet: " + candidate.getId());
+        }
     }
 
     /**

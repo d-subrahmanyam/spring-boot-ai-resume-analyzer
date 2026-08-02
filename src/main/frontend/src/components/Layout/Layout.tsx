@@ -17,6 +17,7 @@ import {
   Users,
   Building2,
   Upload,
+  ClipboardCheck,
   UserCircle,
   Briefcase,
   Target,
@@ -135,6 +136,13 @@ const Layout = () => {
             <NavLink to="/upload" className={navLinkClass} title={collapsed ? 'Upload Resumes' : undefined}>
               <Upload size={20} className={styles.navIcon} />
               {!collapsed && <span>Upload Resumes</span>}
+            </NavLink>
+          )}
+
+          {canUploadResumes && (
+            <NavLink to="/confirmations" className={navLinkClass} title={collapsed ? 'Confirmations' : undefined}>
+              <ClipboardCheck size={20} className={styles.navIcon} />
+              {!collapsed && <span>Confirmations</span>}
             </NavLink>
           )}
 

@@ -28,6 +28,9 @@ public class AiPromptsProperties {
     /** Prompt templates for agentic source selection before matching. */
     private PromptTemplate sourceSelection = new PromptTemplate();
 
+    /** Prompt templates for company due-diligence impressions. */
+    private PromptTemplate companyImpression = new PromptTemplate();
+
     /**
      * Holds a system message and a user-facing prompt template for a specific LLM task.
      */

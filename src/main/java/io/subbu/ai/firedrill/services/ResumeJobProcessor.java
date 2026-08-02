@@ -3,6 +3,8 @@ package io.subbu.ai.firedrill.services;
 import io.subbu.ai.firedrill.entities.Candidate;
 import io.subbu.ai.firedrill.entities.JobQueue;
 import io.subbu.ai.firedrill.entities.ProcessTracker;
+import io.subbu.ai.firedrill.models.CandidateStatus;
+import io.subbu.ai.firedrill.models.EmploymentEntry;
 import io.subbu.ai.firedrill.models.ProcessStatus;
 import io.subbu.ai.firedrill.models.ResumeAnalysisRequest;
 import io.subbu.ai.firedrill.models.ResumeAnalysisResponse;
@@ -14,6 +16,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -32,6 +35,7 @@ public class ResumeJobProcessor {
     private final CandidateRepository candidateRepository;
     private final ProcessTrackerRepository trackerRepository;
     private final JobQueueService jobQueueService;
+    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
     /**
      * Process a resume job from the queue.
@@ -117,10 +121,16 @@ public class ResumeJobProcessor {
                     .domainKnowledge(analysisResponse.getDomainKnowledge())
                     .academicBackground(analysisResponse.getAcademicBackground())
                     .yearsOfExperience(analysisResponse.getYearsOfExperience())
+                    .workHistory(serializeWorkHistory(analysisResponse.getWorkHistory()))
+                    .linkedInUrl(trimToNull(analysisResponse.getLinkedInUrl()))
+                    .githubUrl(trimToNull(analysisResponse.getGithubUrl()))
+                    .twitterUrl(trimToNull(analysisResponse.getTwitterUrl()))
+                    .currentCompany(deriveCurrentCompany(analysisResponse.getWorkHistory()))
+                    .status(CandidateStatus.PENDING_CONFIRMATION)
                     .build();
 
             candidate = candidateRepository.save(candidate);
-            log.info("Candidate saved: jobId={}, candidateId={}, name={}", 
+            log.info("Candidate saved awaiting confirmation: jobId={}, candidateId={}, name={}",
                      jobId, candidate.getId(), candidate.getName());
 
             // Send heartbeat after saving candidate
@@ -146,13 +156,14 @@ public class ResumeJobProcessor {
             result.put("trackerId", trackerId.toString());
             result.put("skillsPresent", analysisResponse.getSkills() != null && !analysisResponse.getSkills().isEmpty());
             result.put("yearsOfExperience", analysisResponse.getYearsOfExperience());
+            result.put("awaitingConfirmation", true);
 
             // Mark job as completed
             jobQueueService.markJobCompleted(jobId, result);
 
             // Record this file as processed; batch-level COMPLETED only when all files are done
             trackerRepository.recordProcessedFile(
-                    trackerId, ProcessStatus.COMPLETED, "Resume processing completed successfully");
+                    trackerId, ProcessStatus.COMPLETED, "Resume analyzed — awaiting confirmation");
 
             log.info("Resume job processing completed successfully: jobId={}, candidateId={}, duration={}s", 
                      jobId, candidate.getId(), 
@@ -251,5 +262,53 @@ public class ResumeJobProcessor {
         // Default: retry for unknown errors
         log.debug("Unknown error type, defaulting to retryable: {}", errorClass);
         return true;
+    }
+
+    /**
+     * Serialise the LLM-extracted employment history into a JSON string for storage.
+     * Returns {@code null} when there is no work history.
+     */
+    private String serializeWorkHistory(List<EmploymentEntry> workHistory) {
+        if (workHistory == null || workHistory.isEmpty()) {
+            return null;
+        }
+        try {
+            return objectMapper.writeValueAsString(workHistory);
+        } catch (Exception e) {
+            log.warn("Failed to serialise work history to JSON: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Derive the candidate's most recent company from the work history
+     * (the entry with a null end year, or the latest start year).
+     */
+    private String deriveCurrentCompany(List<EmploymentEntry> workHistory) {
+        if (workHistory == null || workHistory.isEmpty()) {
+            return null;
+        }
+        return workHistory.stream()
+                .filter(e -> e != null && e.getCompany() != null)
+                .min((a, b) -> {
+                    boolean aCurrent = a.getEndYear() == null;
+                    boolean bCurrent = b.getEndYear() == null;
+                    if (aCurrent && !bCurrent) return -1;
+                    if (!aCurrent && bCurrent) return 1;
+                    int aStart = a.getStartYear() != null ? a.getStartYear() : 0;
+                    int bStart = b.getStartYear() != null ? b.getStartYear() : 0;
+                    return Integer.compare(bStart, aStart);
+                })
+                .map(EmploymentEntry::getCompany)
+                .orElse(null);
+    }
+
+    private static String trimToNull(String value) {
+        if (value == null) return null;
+        String trimmed = value.trim();
+        if (trimmed.isEmpty() || "null".equalsIgnoreCase(trimmed) || "none".equalsIgnoreCase(trimmed)) {
+            return null;
+        }
+        return trimmed;
     }
 }

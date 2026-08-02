@@ -21,14 +21,61 @@ ai:
           "domainKnowledge": "MUST be a plain string with comma-separated domains e.g. Fintech, Cloud",
           "academicBackground": "Education qualifications as a plain string summary",
           "yearsOfExperience": 0,
-          "confidenceScore": 0.0
+          "confidenceScore": 0.0,
+          "workHistory": [
+            {
+              "company": "Company name",
+              "title": "Job title",
+              "startYear": 2015,
+              "endYear": 2019
+            }
+          ],
+          "linkedInUrl": "LinkedIn profile URL if present, else null",
+          "githubUrl": "GitHub profile URL if present, else null",
+          "twitterUrl": "Twitter/X profile URL if present, else null"
         }
 
         IMPORTANT RULES:
         - skills, domainKnowledge, and academicBackground MUST be plain strings, NOT JSON arrays.
         - yearsOfExperience must be a numeric value (integer), calculated from employment history.
         - confidenceScore must be a decimal between 0.0 and 1.0, reflecting extraction accuracy.
+        - workHistory MUST be a JSON array; one entry per distinct company. Use startYear and
+          endYear as integers. Use null for endYear when the role is the current job.
+        - linkedInUrl, githubUrl, and twitterUrl MUST be full URLs (e.g. https://www.linkedin.com/in/...)
+          or null when no profile link is present in the resume.
         - If a field cannot be extracted, use null for strings or 0 for numbers.
+        - Respond ONLY with valid JSON — no additional text, no markdown, no code fences.
+
+    company-impression:
+      system: >
+        You are an expert due-diligence analyst who evaluates the legitimacy of companies
+        based on internet search results. You help recruiters detect fake, shell, or suspicious
+        employers that might appear on a candidate's resume. Return a structured JSON response
+        only — no surrounding text, no markdown code blocks.
+      user-template: |
+        Assess the following company based on the internet search snippets provided.
+
+        Company Name: {companyName}
+
+        SEARCH RESULTS:
+        {searchResults}
+
+        Classify the company and provide your reasoning in JSON format:
+        {
+          "industry": "Industry or sector if identifiable, else null",
+          "verdict": "GENUINE | SUSPICIOUS | UNKNOWN",
+          "summary": "2-3 sentence impression of the company and whether it appears legitimate",
+          "confidenceScore": 0.0
+        }
+
+        IMPORTANT RULES:
+        - verdict MUST be exactly one of: GENUINE, SUSPICIOUS, UNKNOWN.
+          - GENUINE: verifiable company with credible public presence (website, news, registrations).
+          - SUSPICIOUS: indications it may be fake, defunct, shell, or unverifiable.
+          - UNKNOWN: no reliable public information found.
+        - confidenceScore must be a decimal between 0.0 and 1.0 reflecting how confident you are.
+        - Base your assessment ONLY on the provided search results. If results are empty or
+          unhelpful, use verdict UNKNOWN.
         - Respond ONLY with valid JSON — no additional text, no markdown, no code fences.
 
     source-selection:
@@ -75,6 +122,8 @@ ai:
         - Academic Background: {academicBackground}
         - Years of Experience: {yearsOfExperience}
         {enrichedSection}
+        {resumeContextSection}
+        {companyImpressionsSection}
         JOB REQUIREMENT:
         - Title: {jobTitle}
         - Description: {jobDescription}

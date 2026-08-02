@@ -78,6 +78,26 @@ public interface ResumeEmbeddingRepository extends JpaRepository<ResumeEmbedding
             @Param("limit") Integer limit);
 
     /**
+     * Find the resume chunks for a single candidate that are most semantically
+     * similar to a query embedding.  Used to retrieve job-relevant evidence from
+     * the candidate's own resume during matching (RAG).
+     *
+     * @param embedding   the query embedding vector (e.g. of the job description)
+     * @param candidateId the candidate whose resume chunks should be searched
+     * @param limit       maximum number of chunks to return
+     * @return the candidate's most relevant resume chunks, most similar first
+     */
+    @Query(value = "SELECT * FROM resume_embeddings " +
+                   "WHERE candidate_id = CAST(:candidateId AS uuid) " +
+                   "ORDER BY embedding <=> CAST(:embedding AS vector) " +
+                   "LIMIT :limit",
+           nativeQuery = true)
+    List<ResumeEmbedding> findSimilarResumesForCandidate(
+            @Param("embedding") String embedding,
+            @Param("candidateId") UUID candidateId,
+            @Param("limit") Integer limit);
+
+    /**
      * Delete all embeddings for a candidate
      * 
      * @param candidate The candidate whose embeddings should be deleted

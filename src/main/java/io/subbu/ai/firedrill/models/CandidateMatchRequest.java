@@ -80,4 +80,17 @@ public class CandidateMatchRequest {
      * Included when available to improve match accuracy.
      */
     private String enrichedProfileContext;
+
+    /**
+     * Semantically relevant resume chunks retrieved via embedding similarity
+     * against the job description (RAG).  Included when available so the LLM
+     * can ground its score in the candidate's actual work history.
+     */
+    private String relevantResumeContext;
+
+    /**
+     * Company impressions for the candidate's past employers, built by the
+     * company-research pipeline.  Included when available.
+     */
+    private String companyImpressionsContext;
 }

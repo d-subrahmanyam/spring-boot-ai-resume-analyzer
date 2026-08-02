@@ -12,6 +12,7 @@ import CandidateList from './pages/CandidateList/CandidateList'
 import JobRequirements from './pages/JobRequirements/JobRequirements'
 import CandidateMatching from './pages/CandidateMatching/CandidateMatching'
 import FileUpload from './pages/FileUpload/FileUpload'
+import PendingConfirmations from './pages/PendingConfirmations/PendingConfirmations'
 import SkillsManager from './pages/SkillsManager/SkillsManager'
 import { UserRole } from './types/auth'
 
@@ -69,6 +70,16 @@ function App() {
           element={
             <RoleBasedRoute allowedRoles={[UserRole.ADMIN, UserRole.RECRUITER]}>
               <FileUpload />
+            </RoleBasedRoute>
+          }
+        />
+        
+        {/* Confirm extracted candidate details - Admin and Recruiter only */}
+        <Route
+          path="confirmations"
+          element={
+            <RoleBasedRoute allowedRoles={[UserRole.ADMIN, UserRole.RECRUITER]}>
+              <PendingConfirmations />
             </RoleBasedRoute>
           }
         />

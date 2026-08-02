@@ -41,6 +41,9 @@ class ResumeJobProcessorTest {
     @Mock
     private JobQueueService jobQueueService;
 
+    @Mock
+    private com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+
     @InjectMocks
     private ResumeJobProcessor resumeJobProcessor;
 

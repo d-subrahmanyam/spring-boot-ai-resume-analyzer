@@ -61,4 +61,9 @@ public interface CandidateRepository extends JpaRepository<Candidate, UUID> {
      */
     @Query("SELECT COUNT(c) FROM Candidate c")
     Long countAllCandidates();
+
+    /**
+     * Find candidates by lifecycle status (e.g. ACTIVE or PENDING_CONFIRMATION).
+     */
+    List<Candidate> findByStatus(io.subbu.ai.firedrill.models.CandidateStatus status);
 }
