@@ -15,7 +15,6 @@ export const selectIsAuthenticated = (state: RootState) => state.auth.isAuthenti
 export const selectIsLoading = (state: RootState) => state.auth.isLoading
 export const selectAuthError = (state: RootState) => state.auth.error
 export const selectAccessToken = (state: RootState) => state.auth.accessToken
-export const selectTokenExpiresAt = (state: RootState) => state.auth.tokenExpiresAt
 
 // Derived selectors
 export const selectUserRole = createSelector(
@@ -104,23 +103,4 @@ export const selectCanProvideFeedback = createSelector(
 export const selectCanShortlistCandidates = createSelector(
   [selectUserRole],
   (role) => role === UserRole.ADMIN || role === UserRole.RECRUITER
-)
-
-// Token expiration selector
-export const selectIsTokenExpiringSoon = createSelector(
-  [selectTokenExpiresAt],
-  (expiresAt) => {
-    if (!expiresAt) return false
-    const now = Date.now()
-    const fiveMinutes = 5 * 60 * 1000
-    return expiresAt - now < fiveMinutes
-  }
-)
-
-export const selectIsTokenExpired = createSelector(
-  [selectTokenExpiresAt],
-  (expiresAt) => {
-    if (!expiresAt) return true
-    return Date.now() > expiresAt
-  }
 )

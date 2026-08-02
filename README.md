@@ -4,6 +4,28 @@
 
 Resume Analyzer is an AI-powered application that analyzes resumes, extracts candidate information, and matches candidates to job requirements using local LLM (Large Language Model) capabilities.
 
+## Recent Updates (August 2, 2026)
+
+- **🔒 SSE Token Hardening** — the upload status live stream (`/api/upload/status/events`) no longer accepts the 15-minute access JWT in the URL.
+  - New `POST /api/auth/sse-token` endpoint issues a short-lived (60 s default, configurable via `JWT_SSE_TOKEN_EXPIRATION`) token of type `sse`
+  - `JwtAuthenticationFilter` now only accepts the query-parameter token on the SSE endpoint, and only accepts `sse`-type tokens there — access tokens on SSE or SSE tokens elsewhere are rejected
+  - Frontend fetches the token via axios right before opening the `EventSource`, with automatic retry on failure
+- **🩺 LM Studio Health Check (Real Probe)** — `checkLLMStudioHealth()` now performs an authenticated `GET {base-url}/models` HTTP probe (with `Authorization: Bearer <api-key>`, matching LM Studio's documented auth), instead of just connecting.
+  - Distinguishes "server not running" vs "authentication failed (401/403 — check `LLM_STUDIO_API_KEY`)" vs "running with N model(s) loaded"
+  - Admin Dashboard gains a **Check Now** button per service (new `checkServiceHealth` mutation in `adminQueries.ts`)
+- **🗑️ Discard Pending Candidates** — reviewers can now reject AI-extracted candidates still awaiting confirmation:
+  - New `discardCandidate(candidateId: UUID!): Boolean!` GraphQL mutation (`CandidateConfirmationService.discardCandidate`, only `PENDING_CONFIRMATION` candidates can be discarded)
+  - Removed the unused `updateCandidate` mutation (resolver, schema, query, saga, and its tests)
+  - `PendingConfirmations` page shows a per-candidate Discard button; `ConfirmDialog` (new reusable component) replaces `window.confirm`/`window.alert` across Candidates, Jobs, and Skills pages
+  - Load/error/empty states added to Dashboard; form errors now surface on Skills Manager; `enrichment.error` / `candidates.error` shown on Candidate List
+- **🧩 Job Requirements variable mapping fixed** — the saga now passes the correct GraphQL variables (`jobRequirementId` instead of the old `jobId`), fixing job creation/editing
+- **📄 Global REST exception handler** — new `GlobalExceptionHandler` (`@RestControllerAdvice`) returns consistent `{ "error": ... }` JSON for validation failures, `IllegalArgumentException`, access-denied, 404s, and unexpected errors (previously raw framework responses)
+- **🧹 Dead code removal** — dropped unused `updateCandidateSaga`, `GET_PROCESS_STATUS` query, `UPDATE_CANDIDATE` mutation, and 4 unused `authSelectors`; javadoc fix in `InternetSearchProfileEnricher`
+- **✅ Test suite green** — Backend **169 tests, 0 failures, 4 skipped** (BUILD SUCCESS); Frontend **94/94 vitest tests**, `tsc --noEmit` clean, ESLint 0 errors (5 pre-existing warnings)
+- **Docs**: `docs/NEXT-STEPS.md` updated (Docker/network, JWT secret, health-check note, current test counts)
+
+---
+
 ## Recent Updates (February 21, 2026)
 
 - **🤖 Agentic RAG — Candidate Profile Enrichment & Intelligent Matching**
@@ -76,19 +98,19 @@ Resume Analyzer is an AI-powered application that analyzes resumes, extracts can
 
 | Test Suite | Tests | Status | Coverage Target | Tools |
 |------------|-------|--------|----------------|-------|
-| **Backend Unit Tests** | 145 | ✅ 100% passing (145/145) | 80%+ | JUnit 5, Mockito, Testcontainers |
-| **Frontend Unit Tests** | 89 | ✅ 100% passing (89/89) | 70%+ | Vitest, React Testing Library, MSW |
+| **Backend Unit Tests** | 169 | ✅ 169 run, 0 failures, 4 skipped | 80%+ | JUnit 5, Mockito, Testcontainers |
+| **Frontend Unit Tests** | 94 | ✅ 100% passing (94/94) | 70%+ | Vitest, React Testing Library, MSW |
 | **E2E Tests** | 103 | ✅ 100% passing (103/103) | Full UI coverage | Playwright (Chromium) |
-| **Total** | **337 tests** | **✅ 100% passing (337/337)** | - | - |
+| **Total** | **366 tests** | **✅ All passing** | - | - |
 
 ### Test Coverage Breakdown
 
-**Backend (62 tests)**
+**Backend (169 tests - 0 failures, 4 skipped)**
 - ✅ Service Layer: AI processing, embeddings, candidate matching, file parsing
 - ✅ Repository Layer: Custom queries, pgvector similarity search
 - ✅ Controller Layer: File uploads, error handling, request validation
 
-**Frontend (89 tests - 100% passing)**
+**Frontend (94 tests - 100% passing)**
 - ✅ Redux Slices (37 tests): State management with saga workflows
 - ✅ React Components (35 tests): UI components & user interactions (MSW GraphQL mocking)
 - ✅ API Services (17 tests): GraphQL & REST clients with MSW request interception
@@ -182,19 +204,34 @@ AI-powered candidate matching against job requirements.
 ## Architecture
 
 ### Backend Stack
-- **Framework**: Java 25 + Spring Boot 3.2.2
-- **Database**: PostgreSQL with pgvector extension
-- **AI Integration**: Spring AI with local LLM Studio (localhost:1234)
-- **API**: GraphQL for queries/mutations, REST for file uploads
-- **Package Structure**: `io.subbu.ai.firedrill`
+- **Framework**: Java 21 + Spring Boot 3.2.2
+- **Actor Model**: Apache Pekko 1.6.0 (`pekko-actor-typed`, `pekko-stream`, `pekko-slf4j`) — async resume processing pipeline with a supervised worker-actor pool (`ResumeJobSupervisor` → `ResumeWorkerActor`) fed by a resilient Pekko Streams poller (`JobPollingActor`), enabled via `app.pekko.enabled` (default on)
+- **AI Integration**: Spring AI 1.0.0-M6 (OpenAI-compatible client) with local LLM Studio (localhost:1234)
+- **Database**: PostgreSQL 15+ with pgvector extension (`com.pgvector:pgvector`)
+- **Persistence**: Spring Data JPA + Hibernate, Flyway migrations, Hypersistence Utils for JSONB columns
+- **API**: GraphQL for queries/mutations (Spring for GraphQL, `graphql-java-extended-scalars`), REST for file uploads and auth, SSE for live upload status
+- **Resume Parsing**: Apache POI 5.2.5 (DOC/DOCX), Apache PDFBox 3.0.1 (PDF)
+- **Security**: Spring Security + JJWT 0.12.5 (access / refresh / short-lived SSE tokens), method-level `@PreAuthorize` RBAC
+- **Package Structure**: `io.subbu.ai.firedrill` (sub-package `pekko/` for the actor pipeline)
 
 ### Frontend Stack
-- **Framework**: React 18 + TypeScript
-- **State Management**: Redux Toolkit + Redux-Saga
-- **Build Tool**: Vite
+- **Framework**: React 18 + TypeScript 5
+- **State Management**: Redux Toolkit 2 + Redux-Saga 1.3
+- **Build Tool**: Vite 5
 - **Styling**: CSS Modules
-- **API Client**: GraphQL Request + Axios
+- **API Client**: GraphQL Request 6 + Axios
 - **Auth**: JWT stored in localStorage, injected via `requestMiddleware`
+- **Testing**: Vitest + React Testing Library + MSW (unit), Playwright (E2E)
+
+### Async Resume Processing (Apache Pekko Actor Pipeline)
+
+Resume uploads are not processed on the request thread. They are queued in the persistent `job_queue` table (`JobQueueService`) and processed asynchronously by an Apache Pekko actor pipeline in the `io.subbu.ai.firedrill.pekko` package:
+
+1. **`JobPollingActor`** — a resilient Pekko Streams source polls the queue every `app.pekko.poll-interval-ms` (default 5 s), claims pending jobs in batches, and backpressures via a bounded buffer. `RestartSource` + a resuming supervision decider recover from transient DB errors.
+2. **`ResumeJobSupervisor`** — a typed actor that routes claimed jobs round-robin to a pool of workers and tracks in-flight work via `ResumeProcessingStats`. Each worker is supervised with restart-with-backoff, so a crashed worker recovers without taking down the pool.
+3. **`ResumeWorkerActor`** — a single-threaded typed actor that runs the full resume pipeline (parse → AI analysis → embedding → candidate persistence) for one job at a time. Pool size (`app.pekko.worker-count`, default 5) bounds concurrency.
+
+The `ActorSystem` and `Materializer` are Spring beans managed by `ResumePekkoConfig`, and the whole pipeline is toggleable via `app.pekko.enabled` (default on). <br/>Actor lifecycle is owned by `ResumeProcessingEngine`, which spawns the supervisor + poller on startup and terminates the system cleanly on shutdown.
 
 ## Project Structure
 
@@ -207,6 +244,7 @@ resume-analyzer/
 │   │   ├── controllers/       # Additional REST controllers
 │   │   ├── entities/          # JPA entities (User, Employee, Candidate…)
 │   │   ├── models/            # DTOs, enums, statistics records
+│   │   ├── pekko/             # Apache Pekko actor pipeline (supervisor, workers, stream poller)
 │   │   ├── repos/             # Spring Data repositories
 │   │   ├── repositories/      # Additional repositories
 │   │   ├── resolver/          # GraphQL resolvers
@@ -338,10 +376,10 @@ See [E2E Testing Guide](src/main/frontend/tests/e2e/README.md) for detailed docu
 ## Setup Instructions
 
 ### Prerequisites
-- Java 25
+- Java 21
 - Node.js 20.11.0+
 - Yarn 1.22.19+
-- PostgreSQL 15+
+- PostgreSQL 15+ (with pgvector extension)
 - LM Studio (for local LLM)
 
 ### Database Setup
@@ -362,8 +400,9 @@ CREATE EXTENSION vector;
    - **Primary Model**: Mistral 7B Instruct v0.3 or LLaMA 3.1 8B Instruct
    - **Embedding Model**: nomic-embed-text (768 dimensions)
 3. Start LM Studio local server on `http://localhost:1234`
+4. (Optional but recommended) Under **Developer → API Key**, enable an API key and set it as `LLM_STUDIO_API_KEY` in your `.env` — the app sends it as `Authorization: Bearer <token>` per LM Studio's docs
 
-See [LLM-STUDIO-SETUP.md](LLM-STUDIO-SETUP.md) for detailed model recommendations.
+See [LLM-STUDIO-SETUP.md](docs/LLM-STUDIO-SETUP.md) for detailed model recommendations.
 
 ### Backend Setup
 
@@ -612,6 +651,7 @@ POSTGRES_PASSWORD=your_password
 
 # LLM Studio
 LLM_STUDIO_BASE_URL=http://localhost:1234/v1
+LLM_STUDIO_API_KEY=not-needed
 LLM_STUDIO_MODEL=mistral-7b-instruct-v0.3
 LLM_STUDIO_EMBEDDING_MODEL=nomic-embed-text
 
@@ -621,7 +661,7 @@ SERVER_PORT=8080
 
 ### Spring AI Configuration
 
-The application uses Spring AI's OpenAI-compatible client configured for LLM Studio:
+The application uses Spring AI's OpenAI-compatible client configured for LLM Studio. The API key is sent as an `Authorization: Bearer <token>` header on every request (including the `/models` health probe) — exactly the auth scheme LM Studio's local server expects:
 
 ```yaml
 spring:
@@ -666,6 +706,7 @@ The Maven build:
    - Ensure LM Studio is running on localhost:1234
    - Check model is loaded in LM Studio
    - Verify base URL in configuration
+   - If the Admin Dashboard health check says **authentication failed**, double-check `LLM_STUDIO_API_KEY` — the app authenticates with `Authorization: Bearer <token>`, so the key must match the one enabled under LM Studio's **Developer → API Key** settings
 
 2. **pgvector Extension Missing**
    ```sql

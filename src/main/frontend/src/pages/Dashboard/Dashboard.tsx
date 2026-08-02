@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useCallback, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
 import { fetchCandidates } from '@/store/slices/candidatesSlice'
@@ -10,18 +10,43 @@ const Dashboard = () => {
   const navigate = useNavigate()
   const dispatch = useDispatch()
   const candidates = useSelector((state: RootState) => state.candidates.candidates)
+  const candidatesLoading = useSelector((state: RootState) => state.candidates.loading)
+  const candidatesError = useSelector((state: RootState) => state.candidates.error)
   const jobs = useSelector((state: RootState) => state.jobs.jobs)
+  const jobsLoading = useSelector((state: RootState) => state.jobs.loading)
+  const jobsError = useSelector((state: RootState) => state.jobs.error)
 
-  useEffect(() => {
+  const load = useCallback(() => {
     dispatch(fetchCandidates())
     dispatch(fetchJobs())
   }, [dispatch])
 
+  useEffect(() => {
+    load()
+  }, [load])
+
   const activeJobs = jobs.filter((job) => job.isActive).length
+  const loading = candidatesLoading || jobsLoading
+  const error = candidatesError || jobsError
 
   return (
     <div className={styles.dashboard}>
-      <h2>Dashboard</h2>
+      <div className={styles.header}>
+        <h2>Dashboard</h2>
+        <button className={styles.refreshButton} onClick={load} disabled={loading}>
+          🔄 Refresh
+        </button>
+      </div>
+
+      {loading && (
+        <div className={styles.loading}>Loading dashboard data…</div>
+      )}
+
+      {error && (
+        <div className={styles.error} role="alert">
+          {error}
+        </div>
+      )}
 
       <div className={styles.stats}>
         <div className={styles.statCard}>
@@ -37,6 +62,15 @@ const Dashboard = () => {
           <p>{jobs.length}</p>
         </div>
       </div>
+
+      {!loading && candidates.length === 0 && jobs.length === 0 && (
+        <div className={styles.empty}>
+          <p>
+            No data yet. Upload resumes to build your candidate pool, then create a job
+            requirement to start AI-powered matching.
+          </p>
+        </div>
+      )}
 
       <h2>Quick Actions</h2>
       <div className={styles.quickActions}>

@@ -71,7 +71,15 @@ curl http://localhost:1234/v1/models
 
 Expected response should list your loaded model.
 
-### 5. Load Embedding Model (if separate server needed)
+### 5. (Optional) Enable an API Key
+
+1. In LM Studio go to the **Developer** tab
+2. Under **API Key**, click **Generate** (or enable an existing key)
+3. Copy the key and set it as `LLM_STUDIO_API_KEY` in your `.env`
+
+The application authenticates with `Authorization: Bearer <api-key>` on every request — the exact auth scheme LM Studio's local server expects. If no key is configured the app falls back to `not-needed` (LM Studio accepts unauthenticated requests when no key is enabled). When a key *is* enabled in LM Studio, requests without it are rejected with `401`, which the health check reports as "LM Studio authentication failed (check LLM_STUDIO_API_KEY)".
+
+### 6. Load Embedding Model (if separate server needed)
 
 Some setups may require running embeddings on a separate port or instance. Check LM Studio documentation for your version.
 
@@ -81,17 +89,24 @@ The application is already configured to use:
 - **Base URL**: `http://localhost:1234/v1`
 - **Model**: `mistral-7b-instruct-v0.3` (configurable in `application.yml`)
 - **Embedding Model**: `nomic-embed-text`
+- **API Key**: `LLM_STUDIO_API_KEY` (sent as `Authorization: Bearer <token>`; defaults to `not-needed`)
 
 ### Changing Models
 
-Edit `src/main/resources/application.yml`:
+Edit `src/main/resources/application.yml` (the OpenAI-compatible `spring.ai.openai` block):
 
 ```yaml
-ai:
-  llm-studio:
-    base-url: http://localhost:1234/v1
-    model: your-model-name-here
-    embedding-model: your-embedding-model-here
+spring:
+  ai:
+    openai:
+      base-url: ${LLM_STUDIO_BASE_URL}
+      api-key: ${LLM_STUDIO_API_KEY:not-needed}
+      chat:
+        options:
+          model: ${LLM_STUDIO_MODEL}
+      embedding:
+        options:
+          model: ${LLM_STUDIO_EMBEDDING_MODEL}
 ```
 
 ## Performance Tips

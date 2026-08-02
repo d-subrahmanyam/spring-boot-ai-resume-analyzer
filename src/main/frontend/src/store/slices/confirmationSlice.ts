@@ -48,6 +48,7 @@ interface ConfirmationState {
   pendingCandidates: PendingCandidate[]
   loading: boolean
   confirmingId: string | null
+  discardingId: string | null
   error: string | null
 }
 
@@ -55,6 +56,7 @@ const initialState: ConfirmationState = {
   pendingCandidates: [],
   loading: false,
   confirmingId: null,
+  discardingId: null,
   error: null,
 }
 
@@ -88,6 +90,20 @@ const confirmationSlice = createSlice({
       state.confirmingId = null
       state.error = action.payload
     },
+    discardCandidate: (state, action: PayloadAction<string>) => {
+      state.discardingId = action.payload
+      state.error = null
+    },
+    discardCandidateSuccess: (state, action: PayloadAction<{ id: string }>) => {
+      state.pendingCandidates = state.pendingCandidates.filter(
+        (c) => c.id !== action.payload.id
+      )
+      state.discardingId = null
+    },
+    discardCandidateFailure: (state, action: PayloadAction<string>) => {
+      state.discardingId = null
+      state.error = action.payload
+    },
   },
 })
 
@@ -98,6 +114,9 @@ export const {
   confirmCandidate,
   confirmCandidateSuccess,
   confirmCandidateFailure,
+  discardCandidate,
+  discardCandidateSuccess,
+  discardCandidateFailure,
 } = confirmationSlice.actions
 
 export default confirmationSlice.reducer

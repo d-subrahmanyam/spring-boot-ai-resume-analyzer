@@ -22,6 +22,7 @@ import {
   LOAD_SAMPLE_JOBS,
   REMOVE_SAMPLE_JOBS,
 } from '@/services/graphql'
+import ConfirmDialog from '@/components/ConfirmDialog/ConfirmDialog'
 import styles from './JobRequirements.module.css'
 
 const JobRequirements = () => {
@@ -50,6 +51,7 @@ const JobRequirements = () => {
   const [showFeedbackModal, setShowFeedbackModal] = useState(false)
   const [showFeedbackForm, setShowFeedbackForm] = useState(false)
   const [feedbackRefreshTrigger, setFeedbackRefreshTrigger] = useState(0)
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null)
 
   useEffect(() => {
     dispatch(fetchJobs())
@@ -116,10 +118,11 @@ const JobRequirements = () => {
     setShowForm(false)
   }
 
-  const handleDelete = (id: string) => {
-    if (confirm('Are you sure you want to delete this job requirement?')) {
-      dispatch(deleteJob(id))
+  const handleConfirmDelete = () => {
+    if (deleteTargetId) {
+      dispatch(deleteJob(deleteTargetId))
     }
+    setDeleteTargetId(null)
   }
 
   const handleLoadSampleJobs = () => {
@@ -388,7 +391,10 @@ const JobRequirements = () => {
                   </button>
                 )}
                 {canManageJobs && (
-                  <button className={styles.deleteButton} onClick={() => handleDelete(job.id)}>
+                  <button
+                    className={styles.deleteButton}
+                    onClick={() => setDeleteTargetId(job.id)}
+                  >
                     Delete
                   </button>
                 )}
@@ -434,6 +440,16 @@ const JobRequirements = () => {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={deleteTargetId !== null}
+        title="Delete job requirement"
+        message="Are you sure you want to delete this job requirement? Its candidate matches will also be removed. This cannot be undone."
+        confirmLabel="Delete"
+        danger
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setDeleteTargetId(null)}
+      />
 
       {/* Feedback Modal */}
       {showFeedbackModal && selectedJobId && (

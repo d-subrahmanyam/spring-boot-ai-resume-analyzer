@@ -206,3 +206,23 @@ export const ACTIVE_MATCH_RUNS_QUERY = `
     }
   }
 `
+
+/**
+ * Trigger an immediate health probe for a single service
+ * (e.g. "llm-studio" — handy when the backend's 5-minute schedule feels stale).
+ */
+export const CHECK_SERVICE_HEALTH = `
+  mutation CheckServiceHealth($serviceName: String!) {
+    checkServiceHealth(serviceName: $serviceName) {
+      id
+      serviceName
+      status
+      responseTimeMs
+      message
+      lastCheckedAt
+      lastSuccessAt
+      lastFailureAt
+      failureCount
+    }
+  }
+`

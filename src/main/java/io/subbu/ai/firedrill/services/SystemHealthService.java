@@ -7,16 +7,24 @@ import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.ResourceAccessException;
+import org.springframework.web.client.RestTemplate;
 
-import java.io.IOException;
-import java.net.Socket;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.List;
 
 /**
  * Service for system health monitoring
@@ -32,7 +40,12 @@ public class SystemHealthService {
     @Value("${spring.ai.openai.base-url:http://localhost:1234/v1}")
     private String llmStudioBaseUrl;
 
+    @Value("${spring.ai.openai.api-key:}")
+    private String llmStudioApiKey;
+
     private static final int TIMEOUT_MS = 5000;
+
+    private final RestTemplate restTemplate = new RestTemplate();
 
     /**
      * Initialize health records for all services
@@ -98,43 +111,68 @@ public class SystemHealthService {
     }
 
     /**
-     * Check LLM Studio health
+     * Check LLM Studio health.
+     *
+     * <p>Unlike a bare TCP connect, this performs a real authenticated HTTP probe
+     * of {@code GET /models} using the configured API key, so the failure message
+     * distinguishes an unreachable server from an authentication problem or a
+     * missing model.</p>
      */
     @Transactional
     public SystemHealth checkLLMStudioHealth() {
         long startTime = System.currentTimeMillis();
         SystemHealth health = getOrCreateHealthRecord("llm-studio", "LM Studio API");
-        
+
+        String baseUrl = StringUtils.hasText(llmStudioBaseUrl) ? llmStudioBaseUrl : "http://localhost:1234/v1";
+        String modelsUrl = baseUrl.endsWith("/") ? baseUrl + "models" : baseUrl + "/models";
+
         try {
-            // Parse host and port from the configured LLM Studio base URL
-            // (e.g. http://host.docker.internal:1234/v1 inside Docker, http://localhost:1234/v1 locally)
-            java.net.URI uri = new java.net.URI(llmStudioBaseUrl);
-            String llmHost = uri.getHost() != null ? uri.getHost() : "localhost";
-            int llmPort = uri.getPort() > 0 ? uri.getPort() : 1234;
-
-            // Try to connect to LM Studio port
-            try (Socket socket = new Socket()) {
-                socket.connect(new java.net.InetSocketAddress(llmHost, llmPort), TIMEOUT_MS);
-                
-                long responseTime = System.currentTimeMillis() - startTime;
-                health.recordSuccess(responseTime, "LM Studio is running on " + llmHost + ":" + llmPort);
-                
-                log.debug("LLM Studio health check: SUCCESS ({}ms, host: {}:{})", responseTime, llmHost, llmPort);
+            HttpHeaders headers = new HttpHeaders();
+            headers.set(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE);
+            if (StringUtils.hasText(llmStudioApiKey)) {
+                headers.setBearerAuth(llmStudioApiKey);
             }
-        } catch (IOException e) {
-            long responseTime = System.currentTimeMillis() - startTime;
-            health.recordFailure(responseTime, 
-                "LM Studio is not running or not accessible at " + llmStudioBaseUrl);
-            
-            log.warn("LLM Studio health check: NOT RUNNING at {} (expected if LM Studio is not started)", llmStudioBaseUrl);
-        } catch (Exception e) {
-            long responseTime = System.currentTimeMillis() - startTime;
-            health.recordFailure(responseTime,
-                "LM Studio health check failed: " + e.getMessage());
 
+            ResponseEntity<Map> response = restTemplate.exchange(
+                    modelsUrl, HttpMethod.GET, new HttpEntity<>(headers), Map.class);
+
+            long responseTime = System.currentTimeMillis() - startTime;
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                int modelCount = 0;
+                Object data = response.getBody().get("data");
+                if (data instanceof List<?> list) {
+                    modelCount = list.size();
+                }
+                String message = modelCount > 0
+                        ? "LM Studio is running (" + modelCount + " model(s) loaded)"
+                        : "LM Studio is running but no models are loaded";
+                health.recordSuccess(responseTime, message);
+                log.debug("LLM Studio health check: SUCCESS ({}ms, {} model(s))", responseTime, modelCount);
+                return systemHealthRepository.save(health);
+            }
+
+            long errorTime = System.currentTimeMillis() - startTime;
+            String message = "LM Studio returned HTTP " + response.getStatusCode().value() + " at " + baseUrl;
+            health.recordFailure(errorTime, message);
+            log.warn("LLM Studio health check: HTTP {} at {}", response.getStatusCode().value(), baseUrl);
+        } catch (HttpClientErrorException e) {
+            long errorTime = System.currentTimeMillis() - startTime;
+            String message = (e.getStatusCode().value() == 401 || e.getStatusCode().value() == 403)
+                    ? "LM Studio authentication failed at " + baseUrl + " (check LLM_STUDIO_API_KEY)"
+                    : "LM Studio HTTP error " + e.getStatusCode().value() + " at " + baseUrl;
+            health.recordFailure(errorTime, message);
+            log.warn("LLM Studio health check: {}", message);
+        } catch (ResourceAccessException e) {
+            long errorTime = System.currentTimeMillis() - startTime;
+            String message = "LM Studio is not running or not accessible at " + baseUrl;
+            health.recordFailure(errorTime, message);
+            log.warn("LLM Studio health check: NOT RUNNING at {} (expected if LM Studio is not started)", baseUrl);
+        } catch (Exception e) {
+            long errorTime = System.currentTimeMillis() - startTime;
+            health.recordFailure(errorTime, "LM Studio health check failed: " + e.getMessage());
             log.error("LLM Studio health check: FAILED", e);
         }
-        
+
         return systemHealthRepository.save(health);
     }
 

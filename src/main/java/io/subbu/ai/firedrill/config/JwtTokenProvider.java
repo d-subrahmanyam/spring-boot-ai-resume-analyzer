@@ -32,6 +32,9 @@ public class JwtTokenProvider {
     @Value("${jwt.refresh-token-expiration-ms:604800000}") // 7 days
     private long refreshTokenExpirationMs;
 
+    @Value("${jwt.sse-token-expiration-ms:60000}") // 60 seconds
+    private long sseTokenExpirationMs;
+
     private SecretKey key;
 
     @PostConstruct
@@ -68,6 +71,36 @@ public class JwtTokenProvider {
      */
     public String generateRefreshToken(User user) {
         return generateToken(user, refreshTokenExpirationMs, "refresh");
+    }
+
+    /**
+     * Generate a short-lived token for opening the Server-Sent Events stream.
+     *
+     * <p>The browser's {@code EventSource} API cannot set headers, so the token
+     * must travel in the URL query string where it could be captured by proxies
+     * or logs. Keeping it valid for ~60 seconds and only for the SSE endpoint
+     * limits the exposure compared to reusing the 15-minute access token.</p>
+     */
+    public String generateSseToken(User user) {
+        return generateToken(user, sseTokenExpirationMs, "sse");
+    }
+
+    /**
+     * Check whether the token is a short-lived SSE token.
+     */
+    public boolean isSseToken(String token) {
+        try {
+            return "sse".equals(getTokenType(token));
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * TTL of the short-lived SSE token in seconds (for client-side display).
+     */
+    public long getSseTokenTtlSeconds() {
+        return sseTokenExpirationMs / 1000;
     }
 
     /**

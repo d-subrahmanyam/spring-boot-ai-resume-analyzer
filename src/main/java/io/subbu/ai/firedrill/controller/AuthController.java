@@ -1,5 +1,6 @@
 package io.subbu.ai.firedrill.controller;
 
+import io.subbu.ai.firedrill.config.JwtTokenProvider;
 import io.subbu.ai.firedrill.config.SecurityUtils;
 import io.subbu.ai.firedrill.entities.User;
 import io.subbu.ai.firedrill.models.UserRole;
@@ -31,6 +32,7 @@ import java.util.UUID;
 public class AuthController {
 
     private final AuthenticationService authenticationService;
+    private final JwtTokenProvider jwtTokenProvider;
 
     /**
      * Login endpoint
@@ -131,6 +133,21 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(Map.of("error", e.getMessage()));
         }
+    }
+
+    /**
+     * Get a short-lived token for the Server-Sent Events stream.
+     * POST /api/auth/sse-token
+     */
+    @PostMapping("/sse-token")
+    public ResponseEntity<?> getSseToken() {
+        User user = SecurityUtils.getCurrentUser()
+                .orElseThrow(() -> new RuntimeException("User not authenticated"));
+        String token = jwtTokenProvider.generateSseToken(user);
+        return ResponseEntity.ok(Map.of(
+                "token", token,
+                "expiresInSeconds", jwtTokenProvider.getSseTokenTtlSeconds()
+        ));
     }
 
     /**

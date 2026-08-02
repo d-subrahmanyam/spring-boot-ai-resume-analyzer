@@ -4,7 +4,6 @@ import { gqlRequestWithRefresh,
   GET_ALL_CANDIDATES, 
   SEARCH_CANDIDATES_BY_NAME, 
   SEARCH_CANDIDATES_BY_SKILL,
-  UPDATE_CANDIDATE,
   DELETE_CANDIDATE,
   GET_ALL_JOBS,
   CREATE_JOB,
@@ -21,6 +20,7 @@ import { gqlRequestWithRefresh,
   REFRESH_CANDIDATE_PROFILE,
   GET_PENDING_CANDIDATES,
   CONFIRM_CANDIDATE,
+  DISCARD_CANDIDATE,
 } from '@services/graphql'
 import { uploadResumes, getProcessStatus } from '@services/api'
 import * as candidatesActions from '@store/slices/candidatesSlice'
@@ -86,19 +86,6 @@ function* searchCandidatesBySkillSaga(action: PayloadAction<string>) {
   }
 }
 
-function* updateCandidateSaga(action: PayloadAction<Candidate>) {
-  try {
-    const data: { updateCandidate: Candidate } = yield call(
-      gqlRequest,
-      UPDATE_CANDIDATE,
-      action.payload
-    )
-    yield put(candidatesActions.updateCandidateSuccess(data.updateCandidate))
-  } catch (error: any) {
-    yield put(candidatesActions.fetchCandidatesFailure(error.message))
-  }
-}
-
 function* deleteCandidateSaga(action: PayloadAction<string>) {
   try {
     yield call(gqlRequest, DELETE_CANDIDATE, { id: action.payload })
@@ -109,6 +96,23 @@ function* deleteCandidateSaga(action: PayloadAction<string>) {
 }
 
 // Job Sagas
+
+/**
+ * Map the form-facing JobRequirement shape (minExperienceYears, skills,
+ * domainRequirements) onto the GraphQL mutation variables the schema expects
+ * (minExperience, skillIds, domain).
+ */
+const toJobVariables = (job: Partial<JobRequirement>) => ({
+  title: job.title,
+  description: job.description ?? null,
+  requiredSkills: job.requiredSkills ?? null,
+  skillIds: (job.skills ?? []).map((s) => s.id),
+  minExperience: job.minExperienceYears ?? 0,
+  maxExperience: job.maxExperienceYears ?? 0,
+  requiredEducation: job.requiredEducation ?? null,
+  domain: job.domainRequirements ?? null,
+})
+
 function* fetchJobsSaga() {
   try {
     const data: { allJobRequirements: JobRequirement[] } = yield call(
@@ -126,7 +130,7 @@ function* createJobSaga(action: PayloadAction<Omit<JobRequirement, 'id' | 'creat
     const data: { createJobRequirement: JobRequirement } = yield call(
       gqlRequest,
       CREATE_JOB,
-      action.payload
+      toJobVariables(action.payload)
     )
     yield put(jobsActions.createJobSuccess(data.createJobRequirement))
   } catch (error: any) {
@@ -139,7 +143,7 @@ function* updateJobSaga(action: PayloadAction<JobRequirement>) {
     const data: { updateJobRequirement: JobRequirement } = yield call(
       gqlRequest,
       UPDATE_JOB,
-      action.payload
+      { ...toJobVariables(action.payload), id: action.payload.id, isActive: action.payload.isActive }
     )
     yield put(jobsActions.updateJobSuccess(data.updateJobRequirement))
   } catch (error: any) {
@@ -352,6 +356,15 @@ function* confirmCandidateSaga(action: PayloadAction<{ id: string }>) {
   }
 }
 
+function* discardCandidateSaga(action: PayloadAction<string>) {
+  try {
+    yield call(gqlRequest, DISCARD_CANDIDATE, { candidateId: action.payload })
+    yield put(confirmationActions.discardCandidateSuccess({ id: action.payload }))
+  } catch (error: any) {
+    yield put(confirmationActions.discardCandidateFailure(error.message))
+  }
+}
+
 // Root Saga
 export default function* rootSaga() {
   yield all([
@@ -359,7 +372,6 @@ export default function* rootSaga() {
     takeLatest(candidatesActions.fetchCandidates.type, fetchCandidatesSaga),
     takeLatest(candidatesActions.searchCandidatesByName.type, searchCandidatesByNameSaga),
     takeLatest(candidatesActions.searchCandidatesBySkill.type, searchCandidatesBySkillSaga),
-    takeEvery(candidatesActions.updateCandidate.type, updateCandidateSaga),
     takeEvery(candidatesActions.deleteCandidate.type, deleteCandidateSaga),
     takeLatest(jobsActions.fetchJobs.type, fetchJobsSaga),
     takeEvery(jobsActions.createJob.type, createJobSaga),
@@ -380,5 +392,6 @@ export default function* rootSaga() {
     // Candidate confirmation sagas
     takeLatest(confirmationActions.fetchPendingCandidates.type, fetchPendingCandidatesSaga),
     takeEvery(confirmationActions.confirmCandidate.type, confirmCandidateSaga),
+    takeEvery(confirmationActions.discardCandidate.type, discardCandidateSaga),
   ])
 }

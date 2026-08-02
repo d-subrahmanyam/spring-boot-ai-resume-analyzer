@@ -17,6 +17,7 @@ import {
 } from '@/graphql/feedbackQueries'
 import { selectUser } from '@store/selectors/authSelectors'
 import { EntityType } from '@/components/FeedbackForm/FeedbackForm'
+import ConfirmDialog from '@/components/ConfirmDialog/ConfirmDialog'
 import styles from './FeedbackList.module.css'
 
 interface User {
@@ -53,6 +54,9 @@ export default function FeedbackList({
   const [averageRating, setAverageRating] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
+  const [deleteBusy, setDeleteBusy] = useState(false)
+  const [actionError, setActionError] = useState<string | null>(null)
   const currentUser = useSelector(selectUser)
 
   const fetchFeedback = async () => {
@@ -103,24 +107,29 @@ export default function FeedbackList({
     fetchFeedback()
   }, [entityId, entityType, refreshTrigger])
 
-  const handleDelete = async (feedbackId: string) => {
-    if (!confirm('Are you sure you want to delete this feedback?')) return
-
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return
+    setDeleteBusy(true)
+    setActionError(null)
     try {
-      await graphqlClient.request(DELETE_FEEDBACK, { id: feedbackId })
+      await graphqlClient.request(DELETE_FEEDBACK, { id: deleteTarget })
+      setDeleteTarget(null)
       fetchFeedback()
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to delete feedback')
+      setActionError(err instanceof Error ? err.message : 'Failed to delete feedback')
+    } finally {
+      setDeleteBusy(false)
     }
   }
 
   const handleToggleVisibility = async (feedbackId: string, isVisible: boolean) => {
+    setActionError(null)
     try {
       const mutation = isVisible ? HIDE_FEEDBACK : SHOW_FEEDBACK
       await graphqlClient.request(mutation, { id: feedbackId })
       fetchFeedback()
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to update visibility')
+      setActionError(err instanceof Error ? err.message : 'Failed to update visibility')
     }
   }
 
@@ -177,6 +186,11 @@ export default function FeedbackList({
 
   return (
     <div className={styles.feedbackList}>
+      {actionError && (
+        <div className={styles.actionError} role="alert">
+          {actionError}
+        </div>
+      )}
       <div className={styles.header}>
         <h3>Feedback ({feedbackList.length})</h3>
         {averageRating !== null && (
@@ -240,7 +254,7 @@ export default function FeedbackList({
                     {feedback.isVisible ? '👁️' : '🙈'}
                   </button>
                   <button
-                    onClick={() => handleDelete(feedback.id)}
+                    onClick={() => setDeleteTarget(feedback.id)}
                     className={`${styles.actionButton} ${styles.deleteButton}`}
                     title="Delete feedback"
                   >
@@ -252,6 +266,17 @@ export default function FeedbackList({
           ))}
         </div>
       )}
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title="Delete feedback"
+        message="Are you sure you want to delete this feedback? This cannot be undone."
+        confirmLabel="Delete"
+        danger
+        busy={deleteBusy}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   )
 }

@@ -46,14 +46,27 @@ export const getProcessStatus = async (trackerId: string): Promise<ProcessStatus
 }
 
 /**
+ * Fetch a short-lived token scoped to the SSE status stream.
+ *
+ * The full access JWT stays in memory / localStorage and is never exposed in a
+ * URL; the backend issues a one-minute token (type "sse") usable only on the
+ * `/api/upload/status/events` endpoint.
+ */
+const getSseToken = async (): Promise<string> => {
+  const response = await axiosInstance.post<{ token: string }>('/api/auth/sse-token')
+  return response.data.token
+}
+
+/**
  * Open a Server-Sent Events stream of live processing status.
  *
  * Uses a relative URL so it flows through the Vite dev proxy / nginx, avoiding
- * CORS.  The JWT is passed as a query parameter because the browser EventSource
- * API cannot set Authorization headers.
+ * CORS.  The browser EventSource API cannot set Authorization headers, so a
+ * short-lived, endpoint-scoped SSE token is fetched first and passed as a
+ * query parameter.
  */
-export const openTrackerEventSource = (): EventSource => {
-  const token = localStorage.getItem('accessToken') || ''
+export const openTrackerEventSource = async (): Promise<EventSource> => {
+  const token = await getSseToken()
   return new EventSource(`/api/upload/status/events?token=${encodeURIComponent(token)}`)
 }
 

@@ -17,12 +17,14 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Builds an enrichment context from the candidate's existing resume data.
+ * Enriches a candidate with real web-search results.
  *
- * <p>This enricher does <em>not</em> call any external API. It synthesises a
- * structured text block from fields already in the database, giving downstream
- * AI components extra context during candidate matching.  Real web-search
- * (e.g. via Tavily API) can be plugged in here without changing anything else.</p>
+ * <p>When a Tavily API key is configured ({@code app.enrichment.tavily.api-key}),
+ * this enricher queries the <a href="https://app.tavily.com">Tavily</a> search
+ * API and returns a summary of the top results plus Tavily's AI-generated
+ * answer. Without a key it falls back to a context block synthesised from the
+ * candidate's existing resume fields, so the enrichment pipeline never fails
+ * simply because web search is unavailable.</p>
  *
  * <h3>URL detection</h3>
  * This enricher does not match any URL pattern — it is invoked explicitly via

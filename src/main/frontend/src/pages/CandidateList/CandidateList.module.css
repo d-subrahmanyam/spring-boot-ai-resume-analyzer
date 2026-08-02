@@ -74,6 +74,16 @@
   font-size: 1.125rem;
 }
 
+.error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+  padding: 1rem 1.25rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  font-size: 0.95rem;
+}
+
 .grid {
   display: grid;
   gap: 1.5rem;

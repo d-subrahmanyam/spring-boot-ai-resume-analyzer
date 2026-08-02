@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { graphqlClient, GET_ALL_SKILLS, CREATE_SKILL, UPDATE_SKILL, DELETE_SKILL } from '@/services/graphql'
+import ConfirmDialog from '@/components/ConfirmDialog/ConfirmDialog'
 import styles from './SkillsManager.module.css'
 
 interface Skill {
@@ -33,6 +34,8 @@ const SkillsManager = () => {
   })
   const [showAddForm, setShowAddForm] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
+  const [formError, setFormError] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null)
   const itemsPerPage = 10
 
   useEffect(() => {
@@ -77,9 +80,10 @@ const SkillsManager = () => {
 
   const handleSaveEdit = async () => {
     if (!editForm.name.trim()) {
-      alert('Skill name is required')
+      setFormError('Skill name is required')
       return
     }
+    setFormError(null)
 
     setLoading(true)
     try {
@@ -124,9 +128,10 @@ const SkillsManager = () => {
 
   const handleSaveAdd = async () => {
     if (!editForm.name.trim()) {
-      alert('Skill name is required')
+      setFormError('Skill name is required')
       return
     }
+    setFormError(null)
 
     setLoading(true)
     try {
@@ -146,11 +151,10 @@ const SkillsManager = () => {
     }
   }
 
-  const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`Are you sure you want to delete "${name}"?`)) {
-      return
-    }
-
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return
+    const { id } = deleteTarget
+    setDeleteTarget(null)
     setLoading(true)
     try {
       await graphqlClient.request(DELETE_SKILL, { id })
@@ -199,6 +203,12 @@ const SkillsManager = () => {
         <div className={styles.error}>
           {error}
           <button onClick={() => setError(null)}>×</button>
+        </div>
+      )}
+
+      {formError && (
+        <div className={styles.formError} role="alert">
+          {formError}
         </div>
       )}
 
@@ -361,7 +371,7 @@ const SkillsManager = () => {
                             ✏️
                           </button>
                           <button
-                            onClick={() => handleDelete(skill.id, skill.name)}
+                            onClick={() => setDeleteTarget({ id: skill.id, name: skill.name })}
                             className={styles.deleteBtn}
                             disabled={loading || showAddForm}
                             title="Delete skill"
@@ -417,6 +427,17 @@ const SkillsManager = () => {
           )}
         </div>
       )}
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title="Delete skill"
+        message={`Are you sure you want to delete "${deleteTarget?.name ?? ''}"? Skills used by job requirements will no longer be linked. This cannot be undone.`}
+        confirmLabel="Delete"
+        danger
+        busy={loading}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   )
 }

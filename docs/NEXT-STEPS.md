@@ -26,23 +26,26 @@ The Resume Analyzer application is **feature-complete** with all core functional
 **Effort:** 2-3 days
 
 **Tasks:**
-- [ ] Create multi-stage Dockerfile
+- [x] Multi-stage Dockerfile / runtime image
   - Maven build stage (includes frontend build)
-  - Runtime stage with JRE 25
+  - Runtime stage with JRE 21
   - Optimize layer caching
-- [ ] Create docker-compose.yml
+- [x] docker-compose.yml files
   - PostgreSQL service with pgvector
   - Application service
-  - LM Studio service (GPU-enabled)
+  - LM Studio service (host-gateway reachable via `host.docker.internal`)
   - Nginx reverse proxy
-- [ ] Configure environment variables
+- [x] Environment variables
   - Database credentials
-  - LLM Studio endpoints
-  - API keys (if needed)
-- [ ] Add health check endpoints
+  - LLM Studio endpoints (`LLM_STUDIO_BASE_URL`)
+  - LLM Studio API key (`LLM_STUDIO_API_KEY`)
+  - SSE token TTL (`JWT_SSE_TOKEN_EXPIRATION`)
+- [x] Health check endpoints
   - `/actuator/health` for app
   - Database connectivity check
-  - LLM Studio availability check
+  - LLM Studio availability check (authenticated `GET /models` probe)
+
+**Status:** ✅ **COMPLETED** — see `docker-compose.yml` and `docker/docker-compose.yml`
 
 **Deliverables:**
 ```
@@ -182,9 +185,8 @@ k8s/
   - Error handling
 
 **Results:**
-- **62 tests** passing across 6 test classes
+- **171 tests** passing across the backend suite (JUnit 5, Mockito, Spring Boot Test)
 - Testcontainers integration with PostgreSQL + pgvector
-- JUnit 5, Mockito, Spring Boot Test
 - Code pushed to GitHub
 
 **Tools:**
@@ -242,8 +244,8 @@ class AIServiceTest {
   - Error handling
 
 **Results:**
-- **89 tests total** (68 passing, 21 pending UI improvements)
-- Test infrastructure: Vitest 1.2.0, React Testing Library, MSW 2.0
+- **94 tests total** passing (Vitest + React Testing Library)
+- Test infrastructure: Vitest, React Testing Library, MSW 2.0
 - Redux slice tests: All passing (candidatesSlice, jobsSlice, matchesSlice, uploadSlice)
 - API service tests: GraphQL and REST API mocking
 - Test utilities: renderWithProviders with Redux + Router context
@@ -460,17 +462,20 @@ test('complete resume upload and matching flow', async ({ page }) => {
 **Effort:** 3-4 days
 
 **Tasks:**
-- [ ] Implement JWT authentication
+- [x] JWT authentication
   - Login/Register endpoints
   - Token generation and validation
   - Refresh token mechanism
-- [ ] Role-based access control
-  - Admin, Recruiter, Viewer roles
+  - Endpoint-scoped short-lived SSE token (query-param auth for EventSource)
+- [x] Role-based access control
+  - Admin, Recruiter, HR, Hiring Manager roles
   - Method-level security
   - GraphQL field-level security
 - [ ] OAuth2/OIDC integration
   - Google/Microsoft login
   - Keycloak integration
+
+**Status:** ✅ Core JWT + RBAC **COMPLETED**; OAuth2/OIDC still pending
 
 **Libraries:**
 - Spring Security
@@ -526,10 +531,13 @@ test('complete resume upload and matching flow', async ({ page }) => {
 **Effort:** 3 days
 
 **Tasks:**
-- [ ] Metrics collection
+- [x] Metrics collection
   - Spring Boot Actuator
   - Micrometer integration
-  - Custom business metrics
+  - System-health service with scheduled (5-min) + on-demand probes
+- [x] Health endpoints
+  - `/actuator/health`
+  - `systemHealthReport` / `checkServiceHealth` GraphQL admin dashboard
 - [ ] Dashboards
   - Grafana dashboards
   - Key performance indicators
@@ -538,6 +546,8 @@ test('complete resume upload and matching flow', async ({ page }) => {
   - PagerDuty/Opsgenie
   - Slack notifications
   - Email alerts
+
+**Status:** ✅ Actuator + system health **COMPLETED**; Grafana/alerting still pending
 
 **Key Metrics:**
 - Request rate and latency
@@ -832,6 +842,6 @@ Start with **Docker containerization** and **CI/CD pipeline** to enable easy dep
 
 ---
 
-**Document Version:** 1.0  
-**Last Updated:** February 15, 2026  
+**Document Version:** 1.1  
+**Last Updated:** August 2, 2026  
 **Next Review:** After Phase 1 completion

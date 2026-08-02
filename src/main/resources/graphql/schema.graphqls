@@ -588,6 +588,7 @@ type Mutation {
 
     # Candidate confirmation mutations
     confirmCandidate(candidateId: UUID!, input: ConfirmCandidateInput!): Candidate!
+    discardCandidate(candidateId: UUID!): Boolean!
 }
 
 # Schema

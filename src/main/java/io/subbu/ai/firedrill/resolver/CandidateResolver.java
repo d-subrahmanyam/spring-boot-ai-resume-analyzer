@@ -91,29 +91,10 @@ public class CandidateResolver {
 
     @MutationMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER')")
-    public Candidate updateCandidate(
-            @Argument UUID id,
-            @Argument String name,
-            @Argument String email,
-            @Argument String mobile,
-            @Argument String skills,
-            @Argument Integer experience,
-            @Argument String education,
-            @Argument String currentCompany) {
-        
-        log.info("Updating candidate: {}", id);
-        Candidate candidate = candidateRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Candidate not found: " + id));
-
-        if (name != null) candidate.setName(name);
-        if (email != null) candidate.setEmail(email);
-        if (mobile != null) candidate.setMobile(mobile);
-        if (skills != null) candidate.setSkills(skills);
-        if (experience != null) candidate.setExperience(experience);
-        if (education != null) candidate.setEducation(education);
-        if (currentCompany != null) candidate.setCurrentCompany(currentCompany);
-
-        return candidateRepository.save(candidate);
+    public Boolean discardCandidate(@Argument UUID candidateId) {
+        log.info("Discarding candidate: {}", candidateId);
+        confirmationService.discardCandidate(candidateId);
+        return true;
     }
 
     @MutationMapping

@@ -26,14 +26,22 @@ export const useTrackerEventStream = () => {
     let reconnectTimer: ReturnType<typeof setTimeout> | undefined
     let disposed = false
 
-    const connect = () => {
+    const connect = async () => {
       if (disposed) return
 
       let source: EventSource
       try {
-        source = openTrackerEventSource()
+        source = await openTrackerEventSource()
       } catch {
         dispatchRef.current(setSseStatus('error'))
+        // The token request failed (e.g. session expired); retry on the same
+        // backoff schedule so a refreshed session reconnects on its own.
+        if (disposed || retryAttempts >= MAX_RETRY_ATTEMPTS) {
+          return
+        }
+        const delay = Math.min(MAX_RETRY_DELAY_MS, 1000 * 2 ** retryAttempts)
+        retryAttempts += 1
+        reconnectTimer = setTimeout(connect, delay)
         return
       }
       eventSource = source
@@ -61,9 +69,8 @@ export const useTrackerEventStream = () => {
         if (disposed || retryAttempts >= MAX_RETRY_ATTEMPTS) {
           return
         }
-        // Controlled reconnect with exponential backoff. The token is re-read
-        // from localStorage on every attempt, so a fresh token from the axios
-        // refresh flow is picked up automatically.
+        // Controlled reconnect with exponential backoff. A fresh SSE token is
+        // requested on every attempt via the axios refresh flow.
         const delay = Math.min(MAX_RETRY_DELAY_MS, 1000 * 2 ** retryAttempts)
         retryAttempts += 1
         reconnectTimer = setTimeout(connect, delay)

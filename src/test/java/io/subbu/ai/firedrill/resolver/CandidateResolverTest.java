@@ -2,6 +2,7 @@ package io.subbu.ai.firedrill.resolver;
 
 import io.subbu.ai.firedrill.entities.Candidate;
 import io.subbu.ai.firedrill.repos.CandidateRepository;
+import io.subbu.ai.firedrill.services.CandidateConfirmationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -29,6 +30,9 @@ class CandidateResolverTest {
 
     @Mock
     private CandidateRepository candidateRepository;
+
+    @Mock
+    private CandidateConfirmationService confirmationService;
 
     @InjectMocks
     private CandidateResolver candidateResolver;
@@ -165,67 +169,6 @@ class CandidateResolverTest {
     }
 
     @Test
-    @DisplayName("Should update candidate successfully")
-    void shouldUpdateCandidateSuccessfully() {
-        // Given
-        String newName = "John Updated";
-        String newEmail = "john.updated@email.com";
-        String newSkills = "Java, Python, Kubernetes";
-
-        when(candidateRepository.findById(candidateId)).thenReturn(Optional.of(mockCandidate));
-        when(candidateRepository.save(any(Candidate.class))).thenAnswer(invocation -> invocation.getArgument(0));
-
-        // When
-        Candidate result = candidateResolver.updateCandidate(
-                candidateId, newName, newEmail, null, newSkills, 6, null, null);
-
-        // Then
-        assertThat(result.getName()).isEqualTo(newName);
-        assertThat(result.getEmail()).isEqualTo(newEmail);
-        assertThat(result.getSkills()).isEqualTo(newSkills);
-        assertThat(result.getExperience()).isEqualTo(6);
-        verify(candidateRepository).findById(candidateId);
-        verify(candidateRepository).save(any(Candidate.class));
-    }
-
-    @Test
-    @DisplayName("Should update only provided fields")
-    void shouldUpdateOnlyProvidedFields() {
-        // Given
-        String originalEmail = mockCandidate.getEmail();
-        String originalMobile = mockCandidate.getMobile();
-        String newName = "John Updated";
-
-        when(candidateRepository.findById(candidateId)).thenReturn(Optional.of(mockCandidate));
-        when(candidateRepository.save(any(Candidate.class))).thenAnswer(invocation -> invocation.getArgument(0));
-
-        // When
-        Candidate result = candidateResolver.updateCandidate(
-                candidateId, newName, null, null, null, null, null, null);
-
-        // Then
-        assertThat(result.getName()).isEqualTo(newName);
-        assertThat(result.getEmail()).isEqualTo(originalEmail); // Unchanged
-        assertThat(result.getMobile()).isEqualTo(originalMobile); // Unchanged
-        verify(candidateRepository).save(any(Candidate.class));
-    }
-
-    @Test
-    @DisplayName("Should throw exception when updating non-existent candidate")
-    void shouldThrowExceptionWhenUpdatingNonExistentCandidate() {
-        // Given
-        UUID nonExistentId = UUID.randomUUID();
-        when(candidateRepository.findById(nonExistentId)).thenReturn(Optional.empty());
-
-        // When/Then
-        assertThatThrownBy(() -> candidateResolver.updateCandidate(
-                nonExistentId, "New Name", null, null, null, null, null, null))
-                .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("Candidate not found");
-        verify(candidateRepository, never()).save(any());
-    }
-
-    @Test
     @DisplayName("Should delete candidate successfully")
     void shouldDeleteCandidateSuccessfully() {
         // Given
@@ -255,32 +198,27 @@ class CandidateResolverTest {
     }
 
     @Test
-    @DisplayName("Should update all candidate fields when provided")
-    void shouldUpdateAllFieldsWhenProvided() {
-        // Given
-        when(candidateRepository.findById(candidateId)).thenReturn(Optional.of(mockCandidate));
-        when(candidateRepository.save(any(Candidate.class))).thenAnswer(invocation -> invocation.getArgument(0));
-
+    @DisplayName("Should discard candidate by delegating to confirmation service")
+    void shouldDiscardCandidateSuccessfully() {
         // When
-        Candidate result = candidateResolver.updateCandidate(
-                candidateId,
-                "New Name",
-                "new@email.com",
-                "555-9999",
-                "Python, Go",
-                10,
-                "PhD in AI",
-                "New Company"
-        );
+        Boolean result = candidateResolver.discardCandidate(candidateId);
 
         // Then
-        assertThat(result.getName()).isEqualTo("New Name");
-        assertThat(result.getEmail()).isEqualTo("new@email.com");
-        assertThat(result.getMobile()).isEqualTo("555-9999");
-        assertThat(result.getSkills()).isEqualTo("Python, Go");
-        assertThat(result.getExperience()).isEqualTo(10);
-        assertThat(result.getEducation()).isEqualTo("PhD in AI");
-        assertThat(result.getCurrentCompany()).isEqualTo("New Company");
-        verify(candidateRepository).save(any(Candidate.class));
+        assertThat(result).isTrue();
+        verify(confirmationService).discardCandidate(candidateId);
+    }
+
+    @Test
+    @DisplayName("Should propagate error when discarding non-pending candidate")
+    void shouldPropagateDiscardError() {
+        // Given
+        doThrow(new IllegalArgumentException("Only pending candidates can be discarded"))
+                .when(confirmationService).discardCandidate(candidateId);
+
+        // When/Then
+        assertThatThrownBy(() -> candidateResolver.discardCandidate(candidateId))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Only pending candidates");
+        verify(confirmationService).discardCandidate(candidateId);
     }
 }

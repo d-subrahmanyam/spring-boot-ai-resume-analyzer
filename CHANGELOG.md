@@ -1,5 +1,121 @@
 # Resume Analyzer - Change Summary
 
+## ✅ Phase 6: SSE Token Hardening, Real LM Studio Health Probe & Candidate Discard (August 2, 2026)
+
+**Status**: ✅ Complete  
+**Scope**: Short-lived SSE tokens, authenticated `/models` health probe with "Check Now" button, discard-pending-candidate flow, global REST exception handler, dead code removal, UX polish
+
+---
+
+### Phase 6.1: SSE Token Hardening
+
+**Problem:** The upload status live stream (`/api/upload/status/events`) accepted the 15-minute access JWT in the URL query string, because the browser `EventSource` API cannot set `Authorization` headers. This leaked a long-lived token into URLs, proxy logs, etc.
+
+**Changes:**
+
+| File | Changes |
+|------|---------|
+| `config/JwtTokenProvider.java` | Added `jwt.sse-token-expiration-ms` (default 60 s), `generateSseToken(user)`, `isSseToken(token)`, `getSseTokenTtlSeconds()` — tokens carry a `sse` type claim |
+| `controller/AuthController.java` | New `POST /api/auth/sse-token` → `{ token, expiresInSeconds }` for the current user |
+| `config/JwtAuthenticationFilter.java` | Query-parameter token is only read on the SSE endpoint; access tokens are rejected on the SSE endpoint and SSE tokens are rejected everywhere else |
+| `resources/application.yml` | Added `jwt.sse-token-expiration-ms: ${JWT_SSE_TOKEN_EXPIRATION:60000}` |
+
+**Frontend:**
+
+| File | Changes |
+|------|---------|
+| `services/api.ts` | `openTrackerEventSource()` is now async — fetches a fresh SSE token via axios (`POST /api/auth/sse-token`) before opening the `EventSource` |
+| `hooks/useTrackerEventStream.ts` | `connect()` is now async; on token-fetch failure it retries on the existing exponential-backoff schedule so a refreshed session reconnects automatically |
+
+---
+
+### Phase 6.2: Real LM Studio Health Probe
+
+**Problem:** The LM Studio health check only verified a TCP connection, so a wrong base URL, a missing API key, or a server with no loaded model all looked "healthy".
+
+**Changes:** `services/SystemHealthService.java` — `checkLLMStudioHealth()` now performs an authenticated `GET {baseUrl}/models` probe:
+
+- Sends `Authorization: Bearer <api-key>` (from `spring.ai.openai.api-key`), matching LM Studio's documented auth scheme
+- Success: reports "LM Studio is running (N model(s) loaded)" or "…no models loaded"
+- `401/403`: "LM Studio authentication failed (check LLM_STUDIO_API_KEY)"
+- Connection failure: "LM Studio is not running or not accessible"
+
+**Frontend:** Admin Dashboard gains a **Check Now** button per service.
+
+| File | Changes |
+|------|---------|
+| `graphql/adminQueries.ts` | New `CHECK_SERVICE_HEALTH` mutation |
+| `pages/AdminDashboard/AdminDashboard.tsx` | `handleCheckNow` — triggers the health probe per service, refreshes the panel |
+
+---
+
+### Phase 6.3: Discard Pending Candidates
+
+Reviewers can now reject an AI-extracted candidate that is still awaiting confirmation instead of being forced to confirm it.
+
+| File | Changes |
+|------|---------|
+| `services/CandidateConfirmationService.java` | New `discardCandidate(UUID)` — only `PENDING_CONFIRMATION` candidates can be discarded, otherwise `IllegalArgumentException` |
+| `resolver/CandidateResolver.java` | Replaced the unused `updateCandidate` mutation with `discardCandidate(candidateId) → Boolean` |
+| `resources/graphql/schema.graphqls` | Added `discardCandidate(candidateId: UUID!): Boolean!` |
+| `store/slices/confirmationSlice.ts` | Added `discardCandidate` / `Success` / `Failure` actions + `discardingId` state |
+| `store/sagas/index.ts` | Added `discardCandidateSaga`; removed `updateCandidateSaga` |
+| `services/graphql.ts` | Added `DISCARD_CANDIDATE`; removed `UPDATE_CANDIDATE` and unused `GET_PROCESS_STATUS` |
+| `pages/PendingConfirmations/*` | Per-candidate **Discard** button + validation error display |
+
+---
+
+### Phase 6.4: Global REST Exception Handler
+
+**New file**: `config/GlobalExceptionHandler.java` (`@RestControllerAdvice`)
+
+Converts framework/application exceptions into a consistent `{ "error": ... }` JSON body:
+
+| Exception | Status | Body |
+|-----------|--------|------|
+| `MethodArgumentNotValidException` | 400 | `{ error, fieldErrors }` |
+| `IllegalArgumentException` | 400 | `{ error }` |
+| `AccessDeniedException` | 403 | `{ error }` |
+| `NoResourceFoundException` | 404 | `{ error }` |
+| `Exception` (catch-all) | 500 | `{ error }` |
+
+Previously these leaked default Spring error pages / stack traces to REST clients.
+
+---
+
+### Phase 6.5: Dead Code Removal & UX Polish
+
+**Removed:**
+- `updateCandidate` GraphQL mutation — resolver, schema, query, saga, slice actions, and 4 `CandidateResolverTest` cases (replaced with 2 `discardCandidate` tests)
+- Unused `authSelectors` (4 exports)
+- Unused `GET_PROCESS_STATUS` query
+
+**UX polish:**
+
+| File | Changes |
+|------|---------|
+| `components/ConfirmDialog/*` (**new**) | Reusable modal replacing `window.confirm` / `window.alert` |
+| `pages/CandidateList/*` | `deleteTarget` confirm flow, `enrichment.error` + `candidates.error` banners |
+| `pages/JobRequirements/JobRequirements.tsx` | `deleteTarget` confirm flow + **fixed saga variable mapping** (`jobRequirementId`) |
+| `pages/SkillsManager/*` | `deleteTarget` confirm flow + `formError` banner |
+| `pages/Dashboard/*` | Loading / error / empty states + refresh button |
+| `services/enrichers/InternetSearchProfileEnricher.java` | javadoc fix (real Tavily API URL) |
+
+---
+
+### Test Results
+
+| Suite | Count | Status |
+|-------|-------|--------|
+| Backend Unit Tests | 169 | ✅ 0 failures, 0 errors, 4 skipped (BUILD SUCCESS) |
+| Frontend Unit Tests | 94 | ✅ 100% passing (94/94) |
+| E2E Tests (Playwright) | 103 | ✅ 100% passing |
+| **Total** | **366** | **✅ All passing** |
+
+TypeScript (`tsc --noEmit`) clean; ESLint 0 errors (5 pre-existing warnings).
+
+---
+
 ## ✅ Phase 5: Agentic RAG — Profile Enrichment & Intelligent Matching (February 21, 2026)
 
 **Status**: ✅ Complete  

@@ -245,21 +245,6 @@ export const GET_MATCHES_FOR_JOB = `
   }
 `
 
-export const GET_PROCESS_STATUS = `
-  query ProcessStatus($trackerId: UUID!) {
-    processStatus(trackerId: $trackerId) {
-      id
-      status
-      totalFiles
-      processedFiles
-      failedFiles
-      startTime
-      endTime
-      errorMessage
-    }
-  }
-`
-
 // GraphQL Mutations
 export const CREATE_JOB = `
   mutation CreateJob(
@@ -376,41 +361,6 @@ export const LOAD_SAMPLE_JOBS = `
 export const REMOVE_SAMPLE_JOBS = `
   mutation {
     removeSampleJobRequirements
-  }
-`
-
-export const UPDATE_CANDIDATE = `
-  mutation UpdateCandidate(
-    $id: UUID!
-    $name: String
-    $email: String
-    $mobile: String
-    $skills: String
-    $experience: Int
-    $education: String
-    $currentCompany: String
-  ) {
-    updateCandidate(
-      id: $id
-      name: $name
-      email: $email
-      mobile: $mobile
-      skills: $skills
-      experience: $experience
-      education: $education
-      currentCompany: $currentCompany
-    ) {
-      id
-      name
-      email
-      mobile
-      skills
-      experience
-      education
-      currentCompany
-      summary
-      createdAt
-    }
   }
 `
 
@@ -708,6 +658,12 @@ export const CONFIRM_CANDIDATE = `
       experienceSummary
       status
     }
+  }
+`
+
+export const DISCARD_CANDIDATE = `
+  mutation DiscardCandidate($candidateId: UUID!) {
+    discardCandidate(candidateId: $candidateId)
   }
 `
 

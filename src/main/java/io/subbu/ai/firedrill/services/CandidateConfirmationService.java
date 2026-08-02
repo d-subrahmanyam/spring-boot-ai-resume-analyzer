@@ -79,6 +79,28 @@ public class CandidateConfirmationService {
         return candidate;
     }
 
+    /**
+     * Discard a candidate that is still awaiting confirmation.
+     *
+     * <p>Lets a reviewer reject an AI-extracted candidate that is wrong or
+     * spam rather than being forced to confirm it. Only candidates still in
+     * {@link CandidateStatus#PENDING_CONFIRMATION} can be discarded.</p>
+     *
+     * @param candidateId candidate awaiting confirmation
+     */
+    @Transactional
+    public void discardCandidate(UUID candidateId) {
+        Candidate candidate = candidateRepository.findById(candidateId)
+                .orElseThrow(() -> new IllegalArgumentException("Candidate not found: " + candidateId));
+
+        if (candidate.getStatus() != CandidateStatus.PENDING_CONFIRMATION) {
+            throw new IllegalArgumentException("Only pending candidates can be discarded: " + candidateId);
+        }
+
+        candidateRepository.delete(candidate);
+        log.info("Candidate discarded: id={}, name={}", candidate.getId(), candidate.getName());
+    }
+
     private void applyCorrections(Candidate candidate, ConfirmCandidateInput input) {
         if (input == null) {
             return;

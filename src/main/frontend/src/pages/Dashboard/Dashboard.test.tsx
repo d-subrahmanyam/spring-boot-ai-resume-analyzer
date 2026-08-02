@@ -6,7 +6,7 @@ describe('Dashboard Component', () => {
   it('should render dashboard title', () => {
     render(<Dashboard />);
     
-    expect(screen.getByText(/Dashboard/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Dashboard/i })).toBeInTheDocument();
   });
 
   it('should render all main sections', () => {

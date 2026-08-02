@@ -3,9 +3,11 @@ import { useDispatch, useSelector } from 'react-redux'
 import {
   fetchPendingCandidates,
   confirmCandidate,
+  discardCandidate,
 } from '@/store/slices/confirmationSlice'
 import type { PendingCandidate } from '@/store/slices/confirmationSlice'
 import { RootState } from '@/store'
+import ConfirmDialog from '@/components/ConfirmDialog/ConfirmDialog'
 import styles from './PendingConfirmations.module.css'
 
 interface WorkHistoryEntry {
@@ -25,12 +27,16 @@ const parseWorkHistory = (raw: string | null): WorkHistoryEntry[] => {
   }
 }
 
+const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+
 const PendingConfirmations = () => {
   const dispatch = useDispatch()
-  const { pendingCandidates, loading, confirmingId, error } = useSelector(
+  const { pendingCandidates, loading, confirmingId, discardingId, error } = useSelector(
     (state: RootState) => state.confirmation
   )
   const [edits, setEdits] = useState<Record<string, Partial<PendingCandidate>>>({})
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({})
+  const [discardTargetId, setDiscardTargetId] = useState<string | null>(null)
 
   useEffect(() => {
     dispatch(fetchPendingCandidates())
@@ -41,9 +47,38 @@ const PendingConfirmations = () => {
       ...prev,
       [candidateId]: { ...prev[candidateId], [field]: value },
     }))
+    // Clear the per-card validation error once the user fixes the offending field
+    setValidationErrors((prev) => {
+      if (!prev[candidateId]) return prev
+      const next = { ...prev }
+      delete next[candidateId]
+      return next
+    })
+  }
+
+  const validate = (candidate: PendingCandidate): string | null => {
+    const edit = edits[candidate.id] ?? {}
+    const name = (edit.name ?? candidate.name ?? '').trim()
+    const email = (edit.email ?? candidate.email ?? '').trim()
+    if (!name) return 'Name is required.'
+    if (!email) return 'Email is required.'
+    if (!isValidEmail(email)) return 'Enter a valid email address.'
+    return null
   }
 
   const handleConfirm = (candidate: PendingCandidate) => {
+    const error = validate(candidate)
+    if (error) {
+      setValidationErrors((prev) => ({ ...prev, [candidate.id]: error }))
+      return
+    }
+    setValidationErrors((prev) => {
+      if (!prev[candidate.id]) return prev
+      const next = { ...prev }
+      delete next[candidate.id]
+      return next
+    })
+
     const edit = edits[candidate.id] ?? {}
     dispatch(
       confirmCandidate({
@@ -61,6 +96,13 @@ const PendingConfirmations = () => {
         twitterUrl: edit.twitterUrl ?? candidate.twitterUrl ?? undefined,
       })
     )
+  }
+
+  const handleConfirmDiscard = () => {
+    if (discardTargetId) {
+      dispatch(discardCandidate(discardTargetId))
+    }
+    setDiscardTargetId(null)
   }
 
   const verdictClass = (verdict?: string) => {
@@ -113,6 +155,11 @@ const PendingConfirmations = () => {
 
                 <div className={styles.section}>
                   <h4>Extracted Details</h4>
+                  {validationErrors[candidate.id] && (
+                    <div className={styles.validationError} role="alert">
+                      {validationErrors[candidate.id]}
+                    </div>
+                  )}
                   <div className={styles.fieldRow}>
                     <label>Name</label>
                     <input
@@ -222,9 +269,16 @@ const PendingConfirmations = () => {
 
                 <div className={styles.actions}>
                   <button
+                    className={styles.discardButton}
+                    onClick={() => setDiscardTargetId(candidate.id)}
+                    disabled={confirmingId === candidate.id || discardingId === candidate.id}
+                  >
+                    Discard
+                  </button>
+                  <button
                     className={styles.confirmButton}
                     onClick={() => handleConfirm(candidate)}
-                    disabled={confirmingId === candidate.id}
+                    disabled={confirmingId === candidate.id || discardingId === candidate.id}
                   >
                     {confirmingId === candidate.id ? 'Confirming…' : 'Confirm Candidate'}
                   </button>
@@ -234,6 +288,17 @@ const PendingConfirmations = () => {
           })}
         </div>
       )}
+
+      <ConfirmDialog
+        open={discardTargetId !== null}
+        title="Discard candidate"
+        message="Are you sure you want to discard this extracted candidate? It will be permanently removed without saving. This cannot be undone."
+        confirmLabel="Discard"
+        danger
+        busy={discardingId === discardTargetId}
+        onConfirm={handleConfirmDiscard}
+        onCancel={() => setDiscardTargetId(null)}
+      />
     </div>
   )
 }

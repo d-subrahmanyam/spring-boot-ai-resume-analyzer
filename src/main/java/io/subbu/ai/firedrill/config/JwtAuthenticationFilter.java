@@ -36,28 +36,39 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
         try {
-            String jwt = getJwtFromRequest(request);
+            boolean isSseEndpoint = request.getRequestURI() != null
+                    && request.getRequestURI().endsWith("/api/upload/status/events");
+            String jwt = getJwtFromRequest(request, isSseEndpoint);
 
             if (StringUtils.hasText(jwt) && tokenProvider.validateToken(jwt)) {
-                String userId = tokenProvider.getUserIdFromToken(jwt);
-                String role = tokenProvider.getRoleFromToken(jwt);
-
-                // Load user from database
-                User user = userRepository.findById(UUID.fromString(userId))
-                        .orElse(null);
-
-                if (user != null && user.isActive()) {
-                    // Create authentication token
-                    SimpleGrantedAuthority authority = new SimpleGrantedAuthority("ROLE_" + role);
-                    UsernamePasswordAuthenticationToken authentication =
-                            new UsernamePasswordAuthenticationToken(user, null, Collections.singletonList(authority));
-                    authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-
-                    // Set authentication in security context
-                    SecurityContextHolder.getContext().setAuthentication(authentication);
-                    log.debug("Set authentication for user: {}", user.getUsername());
+                // The SSE endpoint may only be opened with a short-lived SSE token
+                // (it travels in the URL, so it must not be the 15-minute access
+                // token). Conversely, SSE tokens are not accepted anywhere else.
+                if (isSseEndpoint && !tokenProvider.isSseToken(jwt)) {
+                    log.warn("Rejected non-SSE token on SSE endpoint: {}", request.getRequestURI());
+                } else if (!isSseEndpoint && tokenProvider.isSseToken(jwt)) {
+                    log.warn("Rejected SSE token on non-SSE endpoint: {}", request.getRequestURI());
                 } else {
-                    log.warn("User not found or inactive: {}", userId);
+                    String userId = tokenProvider.getUserIdFromToken(jwt);
+                    String role = tokenProvider.getRoleFromToken(jwt);
+
+                    // Load user from database
+                    User user = userRepository.findById(UUID.fromString(userId))
+                            .orElse(null);
+
+                    if (user != null && user.isActive()) {
+                        // Create authentication token
+                        SimpleGrantedAuthority authority = new SimpleGrantedAuthority("ROLE_" + role);
+                        UsernamePasswordAuthenticationToken authentication =
+                                new UsernamePasswordAuthenticationToken(user, null, Collections.singletonList(authority));
+                        authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+
+                        // Set authentication in security context
+                        SecurityContextHolder.getContext().setAuthentication(authentication);
+                        log.debug("Set authentication for user: {}", user.getUsername());
+                    } else {
+                        log.warn("User not found or inactive: {}", userId);
+                    }
                 }
             }
         } catch (Exception ex) {
@@ -71,18 +82,21 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
      * Extract JWT token from the Authorization header or the {@code token}
      * query parameter.
      *
-     * <p>The query-parameter path exists for Server-Sent Events: the browser's
-     * {@code EventSource} API cannot set HTTP headers, so the token is carried
-     * in the request URL instead.</p>
+     * <p>The query-parameter path exists for Server-Sent Events only: the
+     * browser's {@code EventSource} API cannot set HTTP headers, so the token
+     * is carried in the request URL. It is never honoured on other endpoints,
+     * which prevents an access token from leaking via the query string.</p>
      */
-    private String getJwtFromRequest(HttpServletRequest request) {
+    private String getJwtFromRequest(HttpServletRequest request, boolean isSseEndpoint) {
         String bearerToken = request.getHeader("Authorization");
         if (StringUtils.hasText(bearerToken) && bearerToken.startsWith("Bearer ")) {
             return bearerToken.substring(7);
         }
-        String tokenParam = request.getParameter("token");
-        if (StringUtils.hasText(tokenParam)) {
-            return tokenParam;
+        if (isSseEndpoint) {
+            String tokenParam = request.getParameter("token");
+            if (StringUtils.hasText(tokenParam)) {
+                return tokenParam;
+            }
         }
         return null;
     }

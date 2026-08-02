@@ -6,7 +6,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { gqlRequestWithRefresh } from '@/services/graphql'
 import { getJobQueueStats, JobQueueStats } from '@/services/api'
-import { ADMIN_DASHBOARD_ALL } from '@/graphql/adminQueries'
+import { ADMIN_DASHBOARD_ALL, CHECK_SERVICE_HEALTH } from '@/graphql/adminQueries'
 import styles from './AdminDashboard.module.css'
 
 // Types for the dashboard data
@@ -119,6 +119,23 @@ export default function AdminDashboard() {
   const [pipelineStats, setPipelineStats] = useState<JobQueueStats | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [checkingService, setCheckingService] = useState<string | null>(null)
+
+  /**
+   * Force an immediate health probe for a service, then refresh the dashboard
+   * so the card reflects the new result without waiting for the 5-minute sweep.
+   */
+  const handleCheckNow = async (serviceName: string) => {
+    setCheckingService(serviceName)
+    try {
+      await gqlRequestWithRefresh(CHECK_SERVICE_HEALTH, { serviceName })
+      await fetchAll()
+    } catch {
+      await fetchAll()
+    } finally {
+      setCheckingService(null)
+    }
+  }
 
   // Track whether initial load has completed (avoids making `data` a dep of fetchAll)
   const hasLoadedRef = useRef(false)
@@ -322,6 +339,13 @@ export default function AdminDashboard() {
                     <span className={styles.metricValue}>{service.failureCount}</span>
                   </div>
                 )}
+                <button
+                  onClick={() => handleCheckNow(service.serviceName)}
+                  disabled={checkingService === service.serviceName}
+                  className={styles.checkNowButton}
+                >
+                  {checkingService === service.serviceName ? 'Checking…' : 'Check Now'}
+                </button>
               </div>
             </div>
           ))}

@@ -18,12 +18,15 @@ import { RootState } from '@/store'
 import FeedbackList from '@/components/FeedbackList/FeedbackList'
 import FeedbackForm from '@/components/FeedbackForm/FeedbackForm'
 import { EntityType } from '@/components/FeedbackForm/FeedbackForm'
+import ConfirmDialog from '@/components/ConfirmDialog/ConfirmDialog'
 import styles from './CandidateList.module.css'
 
 const CandidateList = () => {
   const dispatch = useDispatch()
-  const { candidates, loading } = useSelector((state: RootState) => state.candidates)
-  const { profilesByCandidateId, enrichingCandidateId } = useSelector(
+  const { candidates, loading, error: candidatesError } = useSelector(
+    (state: RootState) => state.candidates
+  )
+  const { profilesByCandidateId, enrichingCandidateId, error: enrichmentError } = useSelector(
     (state: RootState) => state.enrichment
   )
   const [searchType, setSearchType] = useState<'all' | 'name' | 'skill'>('all')
@@ -34,6 +37,7 @@ const CandidateList = () => {
   const [feedbackRefreshTrigger, setFeedbackRefreshTrigger] = useState(0)
   const [expandedEnrichmentId, setExpandedEnrichmentId] = useState<string | null>(null)
   const [urlInputByCandidateId, setUrlInputByCandidateId] = useState<Record<string, string>>({})
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null)
 
   useEffect(() => {
     dispatch(fetchCandidates())
@@ -49,10 +53,11 @@ const CandidateList = () => {
     }
   }
 
-  const handleDelete = (id: string) => {
-    if (confirm('Are you sure you want to delete this candidate?')) {
-      dispatch(deleteCandidate(id))
+  const handleConfirmDelete = () => {
+    if (deleteTargetId) {
+      dispatch(deleteCandidate(deleteTargetId))
     }
+    setDeleteTargetId(null)
   }
 
   const handleOpenFeedback = (candidateId: string) => {
@@ -157,7 +162,13 @@ const CandidateList = () => {
 
       {loading && <p className={styles.loading}>Loading candidates...</p>}
 
-      {!loading && candidates.length === 0 && (
+      {candidatesError && !loading && (
+        <div className={styles.error} role="alert">
+          {candidatesError}
+        </div>
+      )}
+
+      {!loading && !candidatesError && candidates.length === 0 && (
         <div className={styles.empty}>
           <p>No candidates found. Upload some resumes to get started!</p>
         </div>
@@ -220,7 +231,7 @@ const CandidateList = () => {
                 </button>
                 <button
                   className={styles.deleteButton}
-                  onClick={() => handleDelete(candidate.id)}
+                  onClick={() => setDeleteTargetId(candidate.id)}
                   title="Delete candidate"
                 >
                   🗑️
@@ -287,6 +298,13 @@ const CandidateList = () => {
                   {/* Loading state */}
                   {enrichingCandidateId === candidate.id && (
                     <p className={styles.enrichingText}>Fetching profile data…</p>
+                  )}
+
+                  {/* Global enrichment error (e.g. failed fetch/enrich) */}
+                  {enrichmentError && !enrichingCandidateId && (
+                    <p className={styles.errorText} role="alert">
+                      {enrichmentError}
+                    </p>
                   )}
 
                   {/* No profiles yet */}
@@ -394,6 +412,16 @@ const CandidateList = () => {
           ))}
         </div>
       )}
+
+      <ConfirmDialog
+        open={deleteTargetId !== null}
+        title="Delete candidate"
+        message="Are you sure you want to delete this candidate? This cannot be undone."
+        confirmLabel="Delete"
+        danger
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setDeleteTargetId(null)}
+      />
 
       {/* Feedback Modal */}
       {showFeedbackModal && selectedCandidateId && (
