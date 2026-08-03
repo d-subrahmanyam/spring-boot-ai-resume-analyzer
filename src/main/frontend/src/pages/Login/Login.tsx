@@ -12,6 +12,7 @@ import {
   selectIsLoading,
   selectAuthError,
 } from '@store/selectors/authSelectors'
+import { SESSION_EXPIRED_MESSAGE } from '@/utils/tokenUtils'
 import styles from './Login.module.css'
 
 interface LocationState {
@@ -29,6 +30,11 @@ export default function Login() {
   const isAuthenticated = useSelector(selectIsAuthenticated)
   const isLoading = useSelector(selectIsLoading)
   const error = useSelector(selectAuthError)
+
+  // When the user was redirected here because their session expired, show a
+  // friendly notice instead of a raw 401 error.
+  const sessionExpired =
+    new URLSearchParams(location.search).get('session') === 'expired'
 
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -67,6 +73,11 @@ export default function Login() {
         </div>
 
         <form onSubmit={handleSubmit} className={styles.loginForm}>
+          {sessionExpired && !error && (
+            <div className={styles.sessionMessage} role="alert">
+              {SESSION_EXPIRED_MESSAGE}
+            </div>
+          )}
           {error && (
             <div className={styles.errorMessage} role="alert">
               {error}

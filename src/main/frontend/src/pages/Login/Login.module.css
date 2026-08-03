@@ -61,6 +61,15 @@
   animation: shake 0.3s;
 }
 
+.sessionMessage {
+  padding: 0.875rem;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 6px;
+  color: #9a3412;
+  font-size: 0.9rem;
+}
+
 @keyframes shake {
   0%, 100% { transform: translateX(0); }
   25% { transform: translateX(-5px); }

@@ -1,4 +1,5 @@
 import { GraphQLClient, ClientError } from 'graphql-request'
+import { redirectToLogin } from '@/utils/tokenUtils'
 
 const endpoint = window.location.origin + '/graphql'
 
@@ -50,39 +51,11 @@ async function tryRefreshToken(): Promise<string | null> {
 }
 
 /**
- * Show a session-expired banner and redirect to /login after a short delay.
- * This gives the user a readable explanation instead of a raw 401 error.
+ * Session expired — clear tokens and redirect to login with a friendly
+ * message. The /login page reads the ?session=expired query parameter.
  */
 function handleSessionExpired(): void {
-  // Don't create multiple banners if called concurrently
-  if (document.getElementById('__session-expired-banner__')) return
-
-  localStorage.clear()
-
-  const banner = document.createElement('div')
-  banner.id = '__session-expired-banner__'
-  banner.innerHTML =
-    '⏰&nbsp;&nbsp;Your session has expired. Redirecting to login&hellip;'
-  banner.style.cssText = [
-    'position:fixed',
-    'top:0',
-    'left:0',
-    'right:0',
-    'padding:0.9rem 2rem',
-    'background:#c53030',
-    'color:#fff',
-    'text-align:center',
-    'z-index:99999',
-    'font-weight:600',
-    'font-size:0.95rem',
-    'box-shadow:0 2px 8px rgba(0,0,0,0.35)',
-    'letter-spacing:0.01em',
-  ].join(';')
-  document.body.appendChild(banner)
-
-  setTimeout(() => {
-    window.location.href = '/login'
-  }, 2500)
+  redirectToLogin(true)
 }
 
 /**

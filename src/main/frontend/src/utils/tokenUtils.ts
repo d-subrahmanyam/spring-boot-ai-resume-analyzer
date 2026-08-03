@@ -75,3 +75,25 @@ export const getUsernameFromToken = (token: string): string | null => {
   const decoded = decodeToken(token)
   return decoded?.sub || null
 }
+
+/**
+ * Message shown on the login page when the session has expired.
+ */
+export const SESSION_EXPIRED_MESSAGE =
+  'Your session has expired. Please sign in again to continue.'
+
+/**
+ * Redirect to the login page, clearing any stored tokens.
+ *
+ * When the session has genuinely expired, the user is sent to
+ * /login?session=expired so the Login page can show a friendly message
+ * instead of a cryptic 401.
+ */
+export const redirectToLogin = (sessionExpired: boolean = false): void => {
+  localStorage.removeItem('accessToken')
+  localStorage.removeItem('refreshToken')
+  localStorage.removeItem('user')
+
+  const query = sessionExpired ? '?session=expired' : ''
+  window.location.href = `/login${query}`
+}

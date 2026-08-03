@@ -5,6 +5,7 @@
  */
 
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios'
+import { redirectToLogin } from '@/utils/tokenUtils'
 
 // Create axios instance
 export const axiosInstance = axios.create({
@@ -54,6 +55,14 @@ axiosInstance.interceptors.response.use(
       _retry?: boolean
     }
 
+    const url = originalRequest?.url ?? ''
+
+    // A 401 on the login endpoint is bad credentials, not an expired session —
+    // let the Login page show the credentials error instead of redirecting.
+    if (url.includes('/api/auth/login')) {
+      return Promise.reject(error)
+    }
+
     // If error is 401 and we haven't retried yet
     if (error.response?.status === 401 && !originalRequest._retry) {
       if (isRefreshing) {
@@ -78,9 +87,8 @@ axiosInstance.interceptors.response.use(
       const refreshToken = localStorage.getItem('refreshToken')
 
       if (!refreshToken) {
-        // No refresh token available, logout
-        localStorage.clear()
-        window.location.href = '/login'
+        // No refresh token available, redirect to login with friendly message
+        redirectToLogin(true)
         return Promise.reject(error)
       }
 
@@ -109,10 +117,9 @@ axiosInstance.interceptors.response.use(
         // Retry original request
         return axiosInstance(originalRequest)
       } catch (refreshError) {
-        // Refresh failed, logout
+        // Refresh failed, redirect to login with friendly message
         processQueue(refreshError as AxiosError, null)
-        localStorage.clear()
-        window.location.href = '/login'
+        redirectToLogin(true)
         return Promise.reject(refreshError)
       } finally {
         isRefreshing = false
