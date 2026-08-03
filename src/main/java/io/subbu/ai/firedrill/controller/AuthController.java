@@ -141,13 +141,19 @@ public class AuthController {
      */
     @PostMapping("/sse-token")
     public ResponseEntity<?> getSseToken() {
-        User user = SecurityUtils.getCurrentUser()
-                .orElseThrow(() -> new RuntimeException("User not authenticated"));
-        String token = jwtTokenProvider.generateSseToken(user);
-        return ResponseEntity.ok(Map.of(
-                "token", token,
-                "expiresInSeconds", jwtTokenProvider.getSseTokenTtlSeconds()
-        ));
+        try {
+            User user = SecurityUtils.getCurrentUser()
+                    .orElseThrow(() -> new RuntimeException("User not authenticated"));
+            String token = jwtTokenProvider.generateSseToken(user);
+            return ResponseEntity.ok(Map.of(
+                    "token", token,
+                    "expiresInSeconds", jwtTokenProvider.getSseTokenTtlSeconds()
+            ));
+        } catch (Exception e) {
+            log.error("Failed to get SSE token", e);
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("error", e.getMessage()));
+        }
     }
 
     /**
