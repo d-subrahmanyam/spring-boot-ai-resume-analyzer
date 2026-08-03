@@ -65,8 +65,7 @@ public class Candidate {
     /**
      * Binary data of the original resume file
      */
-    @Lob
-    @Column(name = "resume_file")
+    @Column(name = "resume_file", columnDefinition = "BYTEA")
     private byte[] resumeFile;
 
     /**
