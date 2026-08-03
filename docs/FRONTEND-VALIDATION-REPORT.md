@@ -82,7 +82,7 @@ Response: 200 OK with ProcessTracker details
 
 ```
 Application Configuration:
-spring.ai.openai.base-url: http://localhost:1234/v1
+spring.ai.openai.base-url: http://localhost:1234
 spring.ai.openai.chat.options.model: mistralai/mistral-7b-instruct-v0.3
 ```
 

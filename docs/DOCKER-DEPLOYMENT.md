@@ -140,7 +140,7 @@ docker-compose -f docker-compose.yml -f docker-compose.prod.yml ps
 | `DB_USERNAME` | `postgres` | Database username |
 | `DB_PASSWORD` | `postgres` | Database password (change for production!) |
 | `DB_PORT` | `5432` | PostgreSQL port |
-| `LLM_STUDIO_BASE_URL` | `http://host.docker.internal:1234/v1` | LLM Studio API endpoint |
+| `LLM_STUDIO_BASE_URL` | `http://host.docker.internal:1234` | LLM Studio API endpoint (no `/v1` suffix — Spring AI appends it) |
 | `LLM_STUDIO_API_KEY` | `not-needed` | API key (not needed for local LLM Studio) |
 | `LLM_STUDIO_MODEL` | `mistralai/mistral-7b-instruct-v0.3` | Chat model name |
 | `LLM_STUDIO_EMBEDDING_MODEL` | `text-embedding-nomic-embed-text-v1.5` | Embedding model |
@@ -299,7 +299,7 @@ extra_hosts:
 network_mode: host
 
 # Option 3: Use host IP directly
-LLM_STUDIO_BASE_URL=http://192.168.1.100:1234/v1
+LLM_STUDIO_BASE_URL=http://192.168.1.100:1234
 ```
 
 ### Database connection errors

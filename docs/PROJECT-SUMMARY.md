@@ -247,7 +247,7 @@ The application uses **Spring AI's OpenAI-compatible client** pointing to LM Stu
 
 ```yaml
 spring.ai.openai:
-  base-url: http://localhost:1234/v1
+  base-url: http://localhost:1234
   api-key: not-needed  # LM Studio doesn't require API key
   chat.options:
     model: mistral-7b-instruct-v0.3

@@ -225,7 +225,7 @@ APP_PORT=8080
 SPRING_PROFILES_ACTIVE=docker
 
 # LLM Studio
-LLM_STUDIO_BASE_URL=http://host.docker.internal:1234/v1
+LLM_STUDIO_BASE_URL=http://host.docker.internal:1234
 LLM_STUDIO_MODEL=mistralai/mistral-7b-instruct-v0.3
 LLM_STUDIO_EMBEDDING_MODEL=text-embedding-nomic-embed-text-v1.5
 

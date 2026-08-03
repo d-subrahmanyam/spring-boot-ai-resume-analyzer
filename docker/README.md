@@ -205,7 +205,7 @@ docker-compose restart app
 ### Cannot connect to LLM Studio (Linux)
 ```bash
 # Option 1: Use host IP
-LLM_STUDIO_BASE_URL=http://192.168.1.100:1234/v1
+LLM_STUDIO_BASE_URL=http://192.168.1.100:1234
 
 # Option 2: Add to docker-compose.yml
 extra_hosts:

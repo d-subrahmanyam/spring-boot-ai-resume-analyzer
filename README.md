@@ -10,7 +10,7 @@ Resume Analyzer is an AI-powered application that analyzes resumes, extracts can
   - New `POST /api/auth/sse-token` endpoint issues a short-lived (60 s default, configurable via `JWT_SSE_TOKEN_EXPIRATION`) token of type `sse`
   - `JwtAuthenticationFilter` now only accepts the query-parameter token on the SSE endpoint, and only accepts `sse`-type tokens there — access tokens on SSE or SSE tokens elsewhere are rejected
   - Frontend fetches the token via axios right before opening the `EventSource`, with automatic retry on failure
-- **🩺 LM Studio Health Check (Real Probe)** — `checkLLMStudioHealth()` now performs an authenticated `GET {base-url}/models` HTTP probe (with `Authorization: Bearer <api-key>`, matching LM Studio's documented auth), instead of just connecting.
+- **🩺 LM Studio Health Check (Real Probe)** — `checkLLMStudioHealth()` now performs an authenticated `GET {base-url}/v1/models` HTTP probe (with `Authorization: Bearer <api-key>`, matching LM Studio's documented auth), instead of just connecting.
   - Distinguishes "server not running" vs "authentication failed (401/403 — check `LLM_STUDIO_API_KEY`)" vs "running with N model(s) loaded"
   - Admin Dashboard gains a **Check Now** button per service (new `checkServiceHealth` mutation in `adminQueries.ts`)
 - **🗑️ Discard Pending Candidates** — reviewers can now reject AI-extracted candidates still awaiting confirmation:
@@ -650,7 +650,7 @@ POSTGRES_USER=postgres
 POSTGRES_PASSWORD=your_password
 
 # LLM Studio
-LLM_STUDIO_BASE_URL=http://localhost:1234/v1
+LLM_STUDIO_BASE_URL=http://localhost:1234
 LLM_STUDIO_API_KEY=not-needed
 LLM_STUDIO_MODEL=mistralai/ministral-3-14b-reasoning
 LLM_STUDIO_EMBEDDING_MODEL=nomic-embed-text
@@ -661,7 +661,7 @@ SERVER_PORT=8080
 
 ### Spring AI Configuration
 
-The application uses Spring AI's OpenAI-compatible client configured for LLM Studio. The API key is sent as an `Authorization: Bearer <token>` header on every request (including the `/models` health probe) — exactly the auth scheme LM Studio's local server expects:
+The application uses Spring AI's OpenAI-compatible client configured for LLM Studio. Spring AI appends `/v1` to `base-url` itself, so `LLM_STUDIO_BASE_URL` must **not** include `/v1` (otherwise requests go to `/v1/v1/chat/completions`). The API key is sent as an `Authorization: Bearer <token>` header on every request (including the `/v1/models` health probe) — exactly the auth scheme LM Studio's local server expects:
 
 ```yaml
 spring:

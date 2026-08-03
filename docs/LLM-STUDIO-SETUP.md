@@ -87,7 +87,7 @@ Some setups may require running embeddings on a separate port or instance. Check
 ## Configuration in Application
 
 The application is already configured to use:
-- **Base URL**: `http://localhost:1234/v1`
+- **Base URL**: `http://localhost:1234` (Spring AI appends `/v1` itself, so do **not** include `/v1` — otherwise requests hit `/v1/v1/...`)
 - **Model**: `mistralai/ministral-3-14b-reasoning` (configurable in `application.yml`)
 - **Embedding Model**: `text-embedding-nomic-embed-text-v1.5`
 - **API Key**: `LLM_STUDIO_API_KEY` (sent as `Authorization: Bearer <token>`; defaults to `not-needed`)

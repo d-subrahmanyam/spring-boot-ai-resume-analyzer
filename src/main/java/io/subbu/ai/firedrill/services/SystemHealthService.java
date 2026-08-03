@@ -37,7 +37,7 @@ public class SystemHealthService {
     private final SystemHealthRepository systemHealthRepository;
     private final JdbcTemplate jdbcTemplate;
 
-    @Value("${spring.ai.openai.base-url:http://localhost:1234/v1}")
+    @Value("${spring.ai.openai.base-url:http://localhost:1234}")
     private String llmStudioBaseUrl;
 
     @Value("${spring.ai.openai.api-key:}")
@@ -123,8 +123,8 @@ public class SystemHealthService {
         long startTime = System.currentTimeMillis();
         SystemHealth health = getOrCreateHealthRecord("llm-studio", "LM Studio API");
 
-        String baseUrl = StringUtils.hasText(llmStudioBaseUrl) ? llmStudioBaseUrl : "http://localhost:1234/v1";
-        String modelsUrl = baseUrl.endsWith("/") ? baseUrl + "models" : baseUrl + "/models";
+        String baseUrl = StringUtils.hasText(llmStudioBaseUrl) ? llmStudioBaseUrl : "http://localhost:1234";
+        String modelsUrl = baseUrl.endsWith("/") ? baseUrl + "v1/models" : baseUrl + "/v1/models";
 
         try {
             HttpHeaders headers = new HttpHeaders();

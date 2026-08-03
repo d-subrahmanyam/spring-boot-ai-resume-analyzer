@@ -49,11 +49,11 @@ spring:
   
   ai:
     openai:
-      base-url: ${LLM_STUDIO_BASE_URL:http://localhost:1234/v1}
+      base-url: ${LLM_STUDIO_BASE_URL:http://localhost:1234}
       api-key: ${LLM_STUDIO_API_KEY:sk-lm-qetrGQun:QqqQOHpvnMUbonilIAZE}
       chat:
         options:
-          model: ${LLM_STUDIO_MODEL:mistralai/ministral-3-14b-reasoning}
+          model: ${LLM_STUDIO_MODEL:mistralai/mistral-7b-instruct-v0.3}
           temperature: 0.7
           max-tokens: 4000
       embedding:
